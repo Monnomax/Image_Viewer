@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="imgviewer">
+  <schema id="com.example.ImgViewer" path="/com/example/ImgViewer/">
+
+    <!-- ==================== Загальні ==================== -->
+
+    <key name="fullscreen-on-start" type="b">
+      <default>true</default>
+      <summary>Запускати у повноекранному режимі</summary>
+      <description>Відкривати вікно переглядача одразу в повноекранному режимі.</description>
+    </key>
+
+    <key name="remember-zoom" type="b">
+      <default>false</default>
+      <summary>Запам'ятовувати масштаб</summary>
+      <description>Зберігати останній використаний масштаб перегляду між зображеннями/сеансами.</description>
+    </key>
+
+    <key name="remember-position" type="b">
+      <default>false</default>
+      <summary>Запам'ятовувати положення</summary>
+      <description>Зберігати зсув (панорамування) зображення між зображеннями/сеансами.</description>
+    </key>
+
+    <key name="remembered-view-state" type="s">
+      <default>''</default>
+      <summary>Збережений стан масштабування та панорамування</summary>
+      <description>Накопичений стан перегляду для зображень, збережений у форматі
+        path|scale|offset_x|offset_y;...</description>
+    </key>
+
+    <key name="sort-mode" type="s">
+      <default>'NameAsc'</default>
+      <summary>Режим сортування списку зображень</summary>
+    </key>
+
+    <key name="cache-capacity" type="u">
+      <default>12</default>
+      <range min="1" max="256" />
+      <summary>Місткість кешу декодованих зображень</summary>
+    </key>
+
+    <!-- ==================== Перегляд ==================== -->
+
+    <key name="background-color" type="s">
+      <default>'#0D0D0D'</default>
+      <summary>Колір тла</summary>
+      <description>Колір тла вікна перегляду у форматі #RRGGBB.</description>
+    </key>
+
+    <key name="day-night-enabled" type="b">
+      <default>false</default>
+      <summary>Автоматично перемикати колір тла день/ніч</summary>
+    </key>
+
+    <key name="day-color" type="s">
+      <default>'#F5F5F5'</default>
+      <summary>Колір тла для денного режиму</summary>
+    </key>
+
+    <key name="night-color" type="s">
+      <default>'#1E1E1E'</default>
+      <summary>Колір тла для нічного режиму</summary>
+    </key>
+
+    <key name="use-desktop-wallpaper" type="b">
+      <default>false</default>
+    </key>
+
+    <key name="wallpaper-brightness" type="d">
+      <default>0.0</default>
+    </key>
+
+    <key name="wallpaper-blur" type="d">
+      <default>0.0</default>
+    </key>
+
+    <key name="wallpaper-saturation" type="d">
+      <default>1.0</default>
+      <range min="0.0" max="2.0" />
+    </key>
+
+    <key name="wallpaper-grain" type="u">
+      <default>0</default>
+      <range min="0" max="100" />
+    </key>
+
+    <key name="image-corner-radius" type="u">
+      <default>0</default>
+      <range min="0" max="20" />
+      <summary>Заокруглення кутів зображення</summary>
+      <description>Радіус заокруглення кутів (у пікселях) при відображенні зображення.</description>
+    </key>
+
+    <key name="shadow-enabled" type="b">
+      <default>false</default>
+    </key>
+
+    <key name="shadow-offset-x" type="d">
+      <default>0.0</default>
+    </key>
+
+    <key name="shadow-offset-y" type="d">
+      <default>0.0</default>
+    </key>
+
+    <key name="shadow-blur-radius" type="d">
+      <default>10.0</default>
+    </key>
+
+    <key name="shadow-spread-radius" type="d">
+      <default>0.0</default>
+    </key>
+
+    <key name="shadow-color" type="s">
+      <default>'#00000080'</default>
+    </key>
+
+    <key name="shadow-opacity" type="d">
+      <default>50.0</default>
+    </key>
+
+    <key name="min-zoom" type="d">
+      <default>0.02</default>
+      <range min="0.01" max="1.0" />
+      <summary>Мінімальний масштаб</summary>
+    </key>
+
+    <key name="max-zoom" type="d">
+      <default>40.0</default>
+      <range min="1.0" max="100.0" />
+      <summary>Максимальний масштаб</summary>
+    </key>
+
+    <!-- ==================== Навігація ==================== -->
+
+    <key name="zoom-speed" type="d">
+      <default>1.10</default>
+      <range min="1.01" max="2.0" />
+      <summary>Швидкість масштабування колесом</summary>
+      <description>Коефіцієнт зміни масштабу на один "клік" колеса.</description>
+    </key>
+
+    <key name="invert-scroll" type="b">
+      <default>false</default>
+      <summary>Інвертувати колесо</summary>
+    </key>
+
+    <key name="nav-zone-width" type="d">
+      <default>5.0</default>
+      <range min="0.0" max="200.0" />
+      <summary>Ширина навігаційної зони біля країв екрана (px)</summary>
+    </key>
+
+    <key name="show-close-button" type="b">
+      <default>true</default>
+      <summary>Показувати кнопку закриття вікна поверх зображення</summary>
+    </key>
+
+    <key name="show-nav-buttons" type="b">
+      <default>false</default>
+      <summary>Показувати кнопки переходу</summary>
+    </key>
+
+    <key name="cursor-visibility-mode" type="s">
+      <default>"always-show"</default>
+      <summary>Правило відображення курсора</summary>
+    </key>
+
+    <key name="close-button-visibility-mode" type="s">
+      <default>"always-show"</default>
+      <summary>Правило відображення кнопки закриття</summary>
+    </key>
+
+    <key name="nav-buttons-visibility-mode" type="s">
+      <default>"always-show"</default>
+      <summary>Правило відображення кнопок переходу</summary>
+    </key>
+
+    <key name="filename-label-visibility-mode" type="s">
+      <default>"always-show"</default>
+      <summary>Правило відображення назви файлу</summary>
+    </key>
+
+    <key name="thumbnail-strip-visibility-mode" type="s">
+      <default>"always-show"</default>
+      <summary>Правило відображення стрічки мініатюр</summary>
+    </key>
+
+    <key name="thumbnail-strip-enabled" type="b">
+      <default>true</default>
+      <summary>Показувати стрічку мініатюр</summary>
+    </key>
+
+    <key name="thumbnail-strip-position" type="s">
+      <default>'bottom'</default>
+      <summary>Розташування стрічки мініатюр (top / bottom)</summary>
+    </key>
+
+    <key name="thumbnail-strip-size" type="u">
+      <default>96</default>
+      <range min="48" max="256" />
+      <summary>Висота мініатюр у стрічці (пікселів)</summary>
+    </key>
+
+    <key name="thumbnail-strip-padding" type="u">
+      <default>10</default>
+      <range min="0" max="64" />
+      <summary>Внутрішній відступ панелі стрічки</summary>
+    </key>
+
+    <key name="thumbnail-strip-margin" type="u">
+      <default>10</default>
+      <range min="0" max="64" />
+      <summary>Зовнішній відступ панелі стрічки</summary>
+    </key>
+
+    <key name="thumbnail-strip-spacing" type="u">
+      <default>10</default>
+      <range min="0" max="32" />
+      <summary>Відстань між мініатюрами у стрічці</summary>
+    </key>
+
+    <key name="show-delay-ms" type="u">
+      <default>0</default>
+      <range min="0" max="1000" />
+      <summary>Затримка перед появою елементів інтерфейсу (мс)</summary>
+      <description>0 означає "показувати миттєво".</description>
+    </key>
+
+    <key name="hide-cursor-timeout-ms" type="u">
+      <default>0</default>
+      <range min="0" max="5000" />
+      <summary>Затримка автоматичного приховування курсора (мс)</summary>
+      <description>0 означає "не приховувати".</description>
+    </key>
+
+    <key name="sensitivity-zones-enabled" type="b">
+      <default>false</default>
+      <summary>Увімкнути зони чутливості для автоприховування інтерфейсних елементів</summary>
+    </key>
+
+    <!-- ==================== Анімації ==================== -->
+
+    <key name="crossfade-enabled" type="b">
+      <default>true</default>
+      <summary>Увімкнути Crossfade між зображеннями</summary>
+    </key>
+
+    <key name="transition-animation" type="s">
+      <default>'crossfade'</default>
+      <summary>Обрана анімація переходу між зображеннями</summary>
+    </key>
+
+    <key name="crossfade-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Crossfade (мс)</summary>
+    </key>
+
+    <key name="horizontal-slide-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Horizontal Slide (мс)</summary>
+    </key>
+
+    <key name="vertical-slide-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Vertical Slide (мс)</summary>
+    </key>
+
+    <key name="horizontal-fade-slide-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Horizontal Fade Slide (мс)</summary>
+    </key>
+
+    <key name="vertical-fade-slide-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Vertical Fade Slide (мс)</summary>
+    </key>
+
+    <key name="horizontal-scale-slide-duration-ms" type="u">
+      <default>200</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Horizontal Scale Slide (мс)</summary>
+    </key>
+
+    <key name="horizontal-scale-slide-start-scale" type="d">
+      <default>0.75</default>
+      <range min="0.0" max="1.0" />
+      <summary>Початковий масштаб Horizontal Scale Slide</summary>
+    </key>
+
+    <key name="horizontal-scale-slide-easing" type="s">
+      <default>'cubic'</default>
+      <summary>Крива Horizontal Scale Slide</summary>
+    </key>
+
+    <key name="vertical-scale-slide-duration-ms" type="u">
+      <default>200</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість Vertical Scale Slide (мс)</summary>
+    </key>
+
+    <key name="vertical-scale-slide-start-scale" type="d">
+      <default>0.75</default>
+      <range min="0.0" max="1.0" />
+      <summary>Початковий масштаб Vertical Scale Slide</summary>
+    </key>
+
+    <key name="vertical-scale-slide-easing" type="s">
+      <default>'cubic'</default>
+      <summary>Крива Vertical Scale Slide</summary>
+    </key>
+
+    <key name="zoom-fade-in-scale" type="d">
+      <default>0.25</default>
+      <range min="0.0" max="1.0" />
+      <summary>Масштаб вхідного зображення для Zoom Fade</summary>
+    </key>
+
+    <key name="zoom-fade-out-scale" type="d">
+      <default>0.25</default>
+      <range min="0.0" max="1.0" />
+      <summary>Масштаб вихідного зображення для Zoom Fade</summary>
+    </key>
+
+    <key name="zoom-fade-in-easing" type="s">
+      <default>'cubic'</default>
+      <summary>Крива вхідної анімації Zoom Fade</summary>
+    </key>
+
+    <key name="zoom-fade-out-easing" type="s">
+      <default>'cubic'</default>
+      <summary>Крива вихідної анімації Zoom Fade</summary>
+    </key>
+
+    <key name="zoom-fade-in-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість вхідної анімації Zoom Fade</summary>
+    </key>
+
+    <key name="zoom-fade-out-duration-ms" type="u">
+      <default>500</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість вихідної анімації Zoom Fade</summary>
+    </key>
+
+    <key name="crossfade-easing" type="s">
+      <default>'cubic'</default>
+      <summary>Тип інтерполяції Crossfade</summary>
+    </key>
+
+    <key name="crossfade-fade-out-easing" type="s">
+      <default>'cubic'</default>
+      <summary>Тип інтерполяції для fade out</summary>
+    </key>
+
+    <key name="crossfade-fade-out-duration-ms" type="u">
+      <default>250</default>
+      <range min="0" max="2000" />
+      <summary>Тривалість fade out (мс)</summary>
+    </key>
+
+    <key name="smooth-zoom-enabled" type="b">
+      <default>true</default>
+      <summary>Плавне масштабування</summary>
+    </key>
+
+    <key name="animation-duration-ms" type="u">
+      <default>200</default>
+      <range min="0" max="1000" />
+      <summary>Тривалість анімацій (мс)</summary>
+    </key>
+
+    <key name="image-padding" type="u">
+      <default>100</default>
+      <summary>Відступ зображення від країв</summary>
+      <description>Відступ (у пікселях) між зображенням і краями вікна при вписуванні в екран.</description>
+    </key>
+
+    <key name="preload-mode" type="s">
+      <default>'auto'</default>
+      <summary>Режим попереднього завантаження сусідніх зображень</summary>
+    </key>
+    <key name="preload-textures-enabled" type="b">
+      <default>true</default>
+      <summary>Попередньо створювати GPU-текстури для найближчих зображень</summary>
+    </key>
+
+    <key name="delete-action" type="s">
+      <default>'trash'</default>
+      <summary>Дія під час видалення зображення</summary>
+      <description>'trash' — перемістити в кошик, 'permanent' — видалити назавжди.</description>
+    </key>
+
+    <key name="confirm-delete" type="b">
+      <default>true</default>
+      <summary>Показувати підтвердження видалення</summary>
+    </key>
+
+  </schema>
+</schemalist>

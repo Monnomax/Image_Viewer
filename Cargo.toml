@@ -1,0 +1,54 @@
+[package]
+build = "build.rs"
+name = "imgviewer"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "imgviewer"
+path = "src/main.rs"
+
+[dependencies]
+gtk4 = { version = "0.9", features = ["v4_10"] }
+adw = { version = "0.7", package = "libadwaita", features = ["v1_5"] }
+natural_sort = { path = "vendor/natural_sort" }
+little_exif = "0.6.23"
+rexiv2 = { version = "0.10.0", optional = true }
+# Чисте Rust-декодування пікселів (без прив'язки до головного потоку GTK) —
+# щоб важке CPU-декодування великих JPEG/PNG можна було виконувати у
+# фоновому потоці, а не блокувати GTK під час навігації/crossfade. Сам
+# GdkPixbuf, зібраний з уже готових пікселів (Pixbuf::from_bytes), і
+# надалі створюється тільки на головному потоці (image_loader::to_pixbuf) —
+# GdkPixbuf/PixbufLoader лишаються не-Send типами.
+image = { version = "0.25" }
+# Легкий pure-Rust читач тега EXIF Orientation, теж Send — потрібен, щоб
+# у фоновому потоці самостійно застосувати той самий поворот/дзеркалення,
+# який раніше безкоштовно робив Pixbuf::apply_embedded_orientation()
+# (метод самого GdkPixbuf, недоступний поза головним потоком).
+kamadak-exif = "0.6"
+
+[features]
+default = ["gexiv2-metadata", "avif"]
+gexiv2-metadata = ["dep:rexiv2"]
+# Декодування .avif через AV1-декодер dav1d (крейт `dav1d`, обгортка над
+# системною бібліотекою libdav1d, лінкується через pkg-config) — та сама
+# причина зробити це окремою вимикною фічею, що й gexiv2-metadata вище:
+# системна залежність, якої може не бути в оточенні збірки. Без libdav1d
+# (dev-пакет, напр. libdav1d-dev/libdav1d-devel) можна зібрати застосунок
+# з `--no-default-features --features gexiv2-metadata` — тоді .avif просто
+# не потрапить у список підтримуваних форматів (utils::IMAGE_EXTS) і файли
+# з цим розширенням не будуть показані при скануванні каталогу.
+avif = ["image/avif-native"]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+# `image`/`kamadak-exif` — чисто Rust-декодери (на відміну від системних
+# libjpeg-turbo/libpng, якими раніше користувався PixbufLoader). У
+# неоптимізованій dev-збірці таке декодування важких зображень може
+# займати секунди. Тут оптимізуються лише ЗАЛЕЖНОСТІ (весь код у vendor/
+# та crates.io) — код самого imgviewer лишається debug-профілю, тож
+# інкрементальна пересборка при правках лишається швидкою.
+[profile.dev.package."*"]
+opt-level = 3
