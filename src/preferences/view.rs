@@ -24,20 +24,27 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
     let preview_stack = gtk4::Stack::new();
     preview_stack.add_named(&row_custom_colors, Some("custom-colors"));
     preview_stack.add_named(&row_custom_wallpapers, Some("custom-wallpapers"));
+    let preview_row = adw::PreferencesRow::builder().child(&preview_stack).build();
     let effects = wallpaper_row(settings);
 
     group_bg.add(&row_background_type);
-    group_bg.add(&preview_stack);
+    group_bg.add(&preview_row);
     group_bg.add(&effects);
-    update_background_rows(settings, &preview_stack, &effects);
+    update_background_rows(settings, &preview_row, &preview_stack, &effects);
     {
+        let preview_row = preview_row.clone();
         let preview_stack = preview_stack.clone();
         let effects = effects.clone();
         let settings_for_update = settings.clone();
         settings
             .inner()
             .connect_changed(Some("background-type"), move |_, _| {
-                update_background_rows(&settings_for_update, &preview_stack, &effects);
+                update_background_rows(
+                    &settings_for_update,
+                    &preview_row,
+                    &preview_stack,
+                    &effects,
+                );
             });
     }
 
@@ -204,6 +211,7 @@ fn background_type_at(index: u32) -> Option<BackgroundType> {
 
 fn update_background_rows(
     settings: &Settings,
+    preview_row: &adw::PreferencesRow,
     preview_stack: &gtk4::Stack,
     effects: &adw::ExpanderRow,
 ) {
@@ -213,14 +221,14 @@ fn update_background_rows(
     match background_type {
         BackgroundType::CustomColors => {
             preview_stack.set_visible_child_name("custom-colors");
-            preview_stack.set_visible(true);
+            preview_row.set_visible(true);
         }
         BackgroundType::CustomWallpapers => {
             preview_stack.set_visible_child_name("custom-wallpapers");
-            preview_stack.set_visible(true);
+            preview_row.set_visible(true);
         }
         BackgroundType::SystemColors | BackgroundType::SystemWallpapers => {
-            preview_stack.set_visible(false);
+            preview_row.set_visible(false);
         }
     }
     effects.set_visible(uses_wallpaper);
