@@ -24,6 +24,11 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
     let preview_stack = gtk4::Stack::new();
     preview_stack.add_named(&row_custom_colors, Some("custom-colors"));
     preview_stack.add_named(&row_custom_wallpapers, Some("custom-wallpapers"));
+    preview_stack.set_margin_top(28);
+    preview_stack.set_margin_bottom(28);
+    preview_stack.set_margin_start(28);
+    preview_stack.set_margin_end(28);
+
     let preview_row = adw::PreferencesRow::builder().child(&preview_stack).build();
     let effects = wallpaper_row(settings);
 
@@ -236,9 +241,11 @@ fn update_background_rows(
 
 fn background_preview_row(settings: &Settings, wallpapers: bool) -> gtk4::Box {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 30);
-    row.set_size_request(-1, 195);
-    row.set_halign(gtk4::Align::Center);
+    row.set_halign(gtk4::Align::Fill);
     row.set_valign(gtk4::Align::Center);
+    row.set_hexpand(true);
+
+    let ratio = monitor_aspect_ratio();
 
     for (night, label) in [(false, "День"), (true, "Ніч")] {
         let preview = if wallpapers {
@@ -246,29 +253,50 @@ fn background_preview_row(settings: &Settings, wallpapers: bool) -> gtk4::Box {
         } else {
             let key = if night { "night-color" } else { "day-color" };
             let button = color_button(settings, key, false);
-            button.set_size_request(170, 96);
             button.add_css_class("background-preview");
             button.upcast::<gtk4::Widget>()
         };
 
+        preview.set_hexpand(true);
+        preview.set_vexpand(true);
+
+        let frame = gtk4::AspectFrame::new(
+            0.5,
+            0.5,
+            ratio,
+            false,
+        );
+        frame.set_hexpand(true);
+        frame.set_halign(gtk4::Align::Fill);
+        frame.set_valign(gtk4::Align::Center);
+        frame.set_child(Some(&preview));
+
         let title = gtk4::Label::new(Some(label));
-        let preview_column = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
-        preview_column.append(&preview);
+
+        let preview_column =
+            gtk4::Box::new(gtk4::Orientation::Vertical, 8);
+        preview_column.set_hexpand(true);
+        preview_column.set_halign(gtk4::Align::Fill);
+        preview_column.set_valign(gtk4::Align::Center);
+
+        preview_column.append(&frame);
         preview_column.append(&title);
+
         row.append(&preview_column);
     }
+
     row
 }
 
 fn wallpaper_preview_button(settings: &Settings, night: bool) -> gtk4::Widget {
     let button = gtk4::Button::new();
-    button.set_size_request(170, 96);
+
     button.set_overflow(gtk4::Overflow::Hidden);
     button.add_css_class("background-preview");
     button.add_css_class("background-image-preview");
 
     let picture = gtk4::Picture::new();
-    picture.set_size_request(170, 96);
+
     picture.set_content_fit(gtk4::ContentFit::Cover);
     picture.set_can_shrink(true);
     let setting_key = if night {
@@ -332,6 +360,29 @@ fn wallpaper_preview_button(settings: &Settings, night: bool) -> gtk4::Widget {
     button.upcast()
 }
 
+fn monitor_aspect_ratio() -> f32 {
+    let Some(display) = gtk4::gdk::Display::default() else {
+        return 16.0 / 9.0;
+    };
+
+    let monitors = display.monitors();
+
+    let Some(monitor) = monitors
+        .item(0)
+        .and_then(|item| item.downcast::<gtk4::gdk::Monitor>().ok())
+    else {
+        return 16.0 / 9.0;
+    };
+
+    let geometry = monitor.geometry();
+
+    if geometry.height() > 0 {
+        geometry.width() as f32 / geometry.height() as f32
+    } else {
+        16.0 / 9.0
+    }
+}
+
 fn set_preview_picture(picture: &gtk4::Picture, path: &str) {
     if path.is_empty() {
         picture.set_file(None::<&gtk4::gio::File>);
@@ -346,7 +397,7 @@ fn add_background_preview_styles() {
     };
     let provider = gtk4::CssProvider::new();
     provider.load_from_data(
-        "button.background-preview { min-width: 170px; min-height: 96px; padding: 0; border: none; outline: none; box-shadow: none; border-radius: 12px; }",
+        "button.background-preview { padding: 0; border: none; outline: none; box-shadow: none; border-radius: 12px; }",
     );
     gtk4::style_context_add_provider_for_display(
         &display,
