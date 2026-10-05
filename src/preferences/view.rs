@@ -28,7 +28,7 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
 
     group_bg.add(&row_background_type);
     group_bg.add(&preview_stack);
-    group_bg.add(&effects.expander);
+    group_bg.add(&effects);
     update_background_rows(settings, &preview_stack, &effects);
     {
         let preview_stack = preview_stack.clone();
@@ -205,11 +205,10 @@ fn background_type_at(index: u32) -> Option<BackgroundType> {
 fn update_background_rows(
     settings: &Settings,
     preview_stack: &gtk4::Stack,
-    effects: &BackgroundEffects,
+    effects: &adw::ExpanderRow,
 ) {
     let background_type = settings.background_type();
     let uses_wallpaper = background_type.uses_wallpaper();
-    let uses_system_colors = background_type == BackgroundType::SystemColors;
 
     match background_type {
         BackgroundType::CustomColors => {
@@ -224,17 +223,7 @@ fn update_background_rows(
             preview_stack.set_visible(false);
         }
     }
-    effects
-        .expander
-        .set_sensitive(uses_wallpaper || uses_system_colors);
-    effects
-        .brightness
-        .set_sensitive(uses_wallpaper || uses_system_colors);
-    effects.blur.set_sensitive(uses_wallpaper);
-    effects.saturation.set_sensitive(uses_wallpaper);
-    effects
-        .grain
-        .set_sensitive(uses_wallpaper || uses_system_colors);
+    effects.set_visible(uses_wallpaper);
 }
 
 fn background_preview_row(settings: &Settings, wallpapers: bool) -> gtk4::Box {
@@ -256,7 +245,6 @@ fn background_preview_row(settings: &Settings, wallpapers: bool) -> gtk4::Box {
 
         let title = gtk4::Label::new(Some(label));
         let preview_column = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
-        preview_column.set_halign(gtk4::Align::Center);
         preview_column.append(&preview);
         preview_column.append(&title);
         row.append(&preview_column);
@@ -359,34 +347,13 @@ fn add_background_preview_styles() {
     );
 }
 
-#[derive(Clone)]
-struct BackgroundEffects {
-    expander: adw::ExpanderRow,
-    brightness: adw::ActionRow,
-    blur: adw::ActionRow,
-    saturation: adw::ActionRow,
-    grain: adw::ActionRow,
-}
-
-fn wallpaper_row(settings: &Settings) -> BackgroundEffects {
+fn wallpaper_row(settings: &Settings) -> adw::ExpanderRow {
     let expander = adw::ExpanderRow::builder().title("Ефекти тла").build();
-    let brightness = brightness_row(settings);
-    let blur = blur_row(settings);
-    let saturation = saturation_row(settings);
-    let grain = grain_row(settings);
-
-    expander.add_row(&brightness);
-    expander.add_row(&blur);
-    expander.add_row(&saturation);
-    expander.add_row(&grain);
-
-    BackgroundEffects {
-        expander,
-        brightness,
-        blur,
-        saturation,
-        grain,
-    }
+    expander.add_row(&brightness_row(settings));
+    expander.add_row(&blur_row(settings));
+    expander.add_row(&saturation_row(settings));
+    expander.add_row(&grain_row(settings));
+    expander
 }
 
 /// ActionRow з повзунком "Корекція яскравості": -100% (темніше) ..
