@@ -121,11 +121,7 @@ impl BackgroundRenderer {
         &mut self,
         settings: &Settings,
     ) -> Option<(PathBuf, gdk::Texture)> {
-        if !settings.use_desktop_wallpaper() {
-            return None;
-        }
-
-        let path = crate::preferences::settings::desktop_wallpaper_path()?;
+        let path = settings.wallpaper_path()?;
         if let Some((cached_path, texture)) = self.wallpaper_texture.as_ref() {
             if *cached_path == path {
                 return Some((path, texture.clone()));

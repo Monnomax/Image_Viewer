@@ -129,6 +129,7 @@ pub fn build(app: &Application, path_arg: Option<String>) {
     canvas.set_focusable(true);
     canvas.set_viewer(viewer.clone());
     canvas.set_settings(settings.clone());
+    canvas.watch_desktop_wallpaper();
     {
         let window = window.clone();
         let viewer = viewer.clone();

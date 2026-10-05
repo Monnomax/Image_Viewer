@@ -1,6 +1,7 @@
 // viewer/renderer.rs — кастомний віджет Canvas, що використовує gtk4::Snapshot
 // для апаратного прискорення (через GPU) замість програмного рендерингу.
 
+use crate::preferences::settings::BackgroundType;
 use crate::preferences::Settings;
 use crate::viewer::Viewer;
 use gtk4::gdk;
@@ -31,6 +32,7 @@ mod imp {
     pub struct Canvas {
         pub viewer: RefCell<Option<Rc<RefCell<Viewer>>>>,
         pub settings: RefCell<Option<Settings>>,
+        pub(super) desktop_background_settings: RefCell<Option<gtk4::gio::Settings>>,
         background: RefCell<super::background::BackgroundRenderer>,
         /// Індикатор завантаження — замінює текстовий плейсхолдер
         /// "Завантаження…", що раніше малювався через Cairo. Живе як
@@ -150,10 +152,8 @@ mod imp {
             let width = self.obj().width() as f32;
             let height = self.obj().height() as f32;
 
-            // 1. Малюємо фон: або шпалеру робочого столу (розділ "Перегляд" →
-            // "Тло" → "Використовувати шпалеру робочого столу", з розмиттям
-            // і корекцією яскравості), або звичайний суцільний колір з
-            // GSettings — те саме, що й раніше. Якщо Settings ще не
+            // 1. Малюємо фон: системні/користувацькі шпалери з ефектами або
+            // системний/користувацький суцільний колір. Якщо Settings ще не
             // прив'язано (напр. на дуже ранньому кадрі до set_settings()),
             // лишається розумний дефолт темного тла.
             let background_drawn = {
@@ -287,13 +287,28 @@ mod imp {
     }
 
     impl Canvas {
-        /// Колір тла з GSettings (`background-color`), завжди повністю
-        /// непрозорий.
+        /// Системний або користувацький суцільний колір тла.
         pub(super) fn effective_background_color(&self) -> gdk::RGBA {
             match self.settings.borrow().as_ref() {
-                Some(settings) => settings.background_color(),
-                None => gdk::RGBA::new(0.05, 0.05, 0.05, 1.0),
+                Some(settings) if settings.background_type() == BackgroundType::CustomColors => {
+                    settings.background_color()
+                }
+                _ => self.system_background_color(),
             }
+        }
+
+        #[allow(deprecated)]
+        fn system_background_color(&self) -> gdk::RGBA {
+            self.obj()
+                .style_context()
+                .lookup_color("window_bg_color")
+                .unwrap_or_else(|| {
+                    if adw::StyleManager::default().is_dark() {
+                        gdk::RGBA::new(0.141, 0.141, 0.141, 1.0)
+                    } else {
+                        gdk::RGBA::new(0.965, 0.961, 0.949, 1.0)
+                    }
+                })
         }
         /// Радіус заокруглення кутів зображення з GSettings
         /// (`image-corner-radius`). 0, якщо Settings ще не прив'язано.
@@ -355,12 +370,30 @@ impl Canvas {
         self.queue_draw();
     }
 
-    /// Прив'язує Canvas до Settings, щоб snapshot() міг читати
-    /// background-color. Перемальовування при зміні цього ключа запускає
-    /// app.rs через Settings::connect_changed(...) -> canvas.queue_draw().
+    /// Прив'язує Canvas до Settings для вибору тла та його перемальовування.
     pub fn set_settings(&self, settings: Settings) {
         *self.imp().settings.borrow_mut() = Some(settings);
         self.queue_draw();
+    }
+
+    pub fn watch_desktop_wallpaper(&self) {
+        const BACKGROUND_SCHEMA: &str = "org.gnome.desktop.background";
+        let schema_exists = gtk4::gio::SettingsSchemaSource::default()
+            .and_then(|source| source.lookup(BACKGROUND_SCHEMA, true))
+            .is_some();
+        if !schema_exists {
+            return;
+        }
+        let settings = gtk4::gio::Settings::new(BACKGROUND_SCHEMA);
+        let canvas = self.downgrade();
+        settings.connect_changed(None, move |_, key| {
+            if matches!(key, "picture-uri" | "picture-uri-dark" | "picture-options") {
+                if let Some(canvas) = canvas.upgrade() {
+                    canvas.queue_draw();
+                }
+            }
+        });
+        *self.imp().desktop_background_settings.borrow_mut() = Some(settings);
     }
 
     pub fn connect_open_file<F: Fn(&gtk4::Button) + 'static>(&self, callback: F) {
@@ -373,6 +406,3 @@ impl Default for Canvas {
         Self::new()
     }
 }
-
-
-

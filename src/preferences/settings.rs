@@ -259,9 +259,64 @@ impl SettingCodec for CrossfadeEasing {
 #[derive(Clone)]
 pub struct Settings(gio::Settings);
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BackgroundType {
+    SystemColors,
+    CustomColors,
+    SystemWallpapers,
+    CustomWallpapers,
+}
+
+impl BackgroundType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SystemColors => "system-colors",
+            Self::CustomColors => "custom-colors",
+            Self::SystemWallpapers => "system-wallpapers",
+            Self::CustomWallpapers => "custom-wallpapers",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Self {
+        match value {
+            "custom-colors" => Self::CustomColors,
+            "system-wallpapers" => Self::SystemWallpapers,
+            "custom-wallpapers" => Self::CustomWallpapers,
+            _ => Self::SystemColors,
+        }
+    }
+
+    pub fn uses_wallpaper(self) -> bool {
+        matches!(self, Self::SystemWallpapers | Self::CustomWallpapers)
+    }
+}
+
 impl Settings {
     pub fn new() -> Self {
-        Self(gio::Settings::new(APP_ID))
+        let settings = gio::Settings::new(APP_ID);
+        if settings.user_value("background-type").is_none() {
+            let use_desktop_wallpaper = settings.boolean("use-desktop-wallpaper");
+            let day_night_enabled = settings.boolean("day-night-enabled");
+            let has_legacy_color = settings.user_value("background-color").is_some();
+            let background_type = if use_desktop_wallpaper {
+                BackgroundType::SystemWallpapers
+            } else if day_night_enabled || has_legacy_color {
+                BackgroundType::CustomColors
+            } else {
+                BackgroundType::SystemColors
+            };
+            if has_legacy_color && !day_night_enabled {
+                let legacy_color = settings.string("background-color");
+                if settings.user_value("day-color").is_none() {
+                    let _ = settings.set_string("day-color", &legacy_color);
+                }
+                if settings.user_value("night-color").is_none() {
+                    let _ = settings.set_string("night-color", &legacy_color);
+                }
+            }
+            let _ = settings.set_string("background-type", background_type.as_str());
+        }
+        Self(settings)
     }
 
     /// Доступ до сирого gio::Settings — потрібен вікну налаштувань для
@@ -360,28 +415,23 @@ impl Settings {
 
     // ---------------- Перегляд ----------------
 
-    /// Колір тла для ручного режиму, або — якщо в розділі "Перегляд"
-    /// увімкнено перемикач "День / Ніч" — автоматично підставлений
-    /// `day-color`/`night-color` залежно від поточної системної схеми
-    /// кольорів (AdwStyleManager::is_dark(), яка сама стежить за системним
-    /// портал-налаштуванням "Темний стиль" і оновлюється в реальному часі
-    /// при перемиканні системи — canvas.queue_draw() на цю зміну підписаний
-    /// окремо в app.rs).
-    pub fn background_color(&self) -> gdk::RGBA {
-        if self.day_night_enabled() {
-            if adw::StyleManager::default().is_dark() {
-                self.night_color()
-            } else {
-                self.day_color()
-            }
-        } else {
-            parse_hex_color(&self.0.string("background-color"))
-                .unwrap_or(gdk::RGBA::new(0.05, 0.05, 0.05, 1.0))
-        }
+    pub fn background_type(&self) -> BackgroundType {
+        BackgroundType::from_str(&self.0.string("background-type"))
     }
 
-    pub fn day_night_enabled(&self) -> bool {
-        self.0.boolean("day-night-enabled")
+    pub fn set_background_type(&self, background_type: BackgroundType) {
+        let _ = self
+            .0
+            .set_string("background-type", background_type.as_str());
+    }
+
+    /// Колір тла користувацького режиму відповідно до поточної системної теми.
+    pub fn background_color(&self) -> gdk::RGBA {
+        if adw::StyleManager::default().is_dark() {
+            self.night_color()
+        } else {
+            self.day_color()
+        }
     }
 
     pub fn day_color(&self) -> gdk::RGBA {
@@ -394,8 +444,39 @@ impl Settings {
             .unwrap_or(gdk::RGBA::new(0.12, 0.12, 0.12, 1.0))
     }
 
-    pub fn use_desktop_wallpaper(&self) -> bool {
-        self.0.boolean("use-desktop-wallpaper")
+    pub fn wallpaper_path(&self) -> Option<PathBuf> {
+        match self.background_type() {
+            BackgroundType::SystemWallpapers => desktop_wallpaper_path(),
+            BackgroundType::CustomWallpapers => {
+                let key = if adw::StyleManager::default().is_dark() {
+                    "custom-wallpaper-night"
+                } else {
+                    "custom-wallpaper-day"
+                };
+                let path = PathBuf::from(self.0.string(key).as_str());
+                path.is_file().then_some(path)
+            }
+            BackgroundType::SystemColors | BackgroundType::CustomColors => None,
+        }
+    }
+
+    pub fn custom_wallpaper(&self, night: bool) -> String {
+        self.0
+            .string(if night {
+                "custom-wallpaper-night"
+            } else {
+                "custom-wallpaper-day"
+            })
+            .to_string()
+    }
+
+    pub fn set_custom_wallpaper(&self, night: bool, path: &str) {
+        let key = if night {
+            "custom-wallpaper-night"
+        } else {
+            "custom-wallpaper-day"
+        };
+        let _ = self.0.set_string(key, path);
     }
 
     /// -100.0 (найтемніше) .. 0.0 (без корекції) .. +100.0 (найсвітліше).
@@ -903,5 +984,20 @@ mod tests {
     #[test]
     fn invalid_hex_is_none() {
         assert!(parse_hex_color("not-a-color").is_none());
+    }
+
+    #[test]
+    fn background_type_uses_stable_setting_values() {
+        for background_type in [
+            BackgroundType::SystemColors,
+            BackgroundType::CustomColors,
+            BackgroundType::SystemWallpapers,
+            BackgroundType::CustomWallpapers,
+        ] {
+            assert_eq!(
+                BackgroundType::from_str(background_type.as_str()),
+                background_type
+            );
+        }
     }
 }

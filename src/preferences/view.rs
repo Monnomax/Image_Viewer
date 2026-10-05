@@ -1,6 +1,8 @@
 // preferences/view.rs — розділ "Перегляд": тло, межі масштабування.
 
-use crate::preferences::settings::{parse_hex_color, rgba_to_hex, rgba_to_hex_alpha, Settings};
+use crate::preferences::settings::{
+    parse_hex_color, rgba_to_hex, rgba_to_hex_alpha, BackgroundType, Settings,
+};
 use adw::prelude::*;
 use gtk4::gdk;
 use std::cell::Cell;
@@ -15,39 +17,28 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
     // ---- Група: тло ----
     let group_bg = adw::PreferencesGroup::builder().title("Тло").build();
 
-    let row_background_color = color_row(settings, "background-color", "Колір тла");
-    let row_day_night = day_night_row(settings);
-    let row_wallpaper = wallpaper_row(settings, &row_day_night);
+    add_background_preview_styles();
+    let row_background_type = background_type_row(settings);
+    let row_custom_colors = background_preview_row(settings, false);
+    let row_custom_wallpapers = background_preview_row(settings, true);
+    let preview_stack = gtk4::Stack::new();
+    preview_stack.add_named(&row_custom_colors, Some("custom-colors"));
+    preview_stack.add_named(&row_custom_wallpapers, Some("custom-wallpapers"));
+    let effects = wallpaper_row(settings);
 
-    group_bg.add(&row_background_color);
-    group_bg.add(&row_day_night);
-    group_bg.add(&row_wallpaper);
-
-    // "Колір тла" неактивний, якщо увімкнено хоч "День / Ніч", хоч
-    // "Шпалеру робочого столу" — два незалежних .bind() на ту саму
-    // властивість "sensitive" конфліктували б (кожен перезаписував би її
-    // лише на основі свого ключа, ігноруючи стан другого), тому тут
-    // свідомо перераховуємо комбіновану умову вручну при зміні будь-якого
-    // з двох ключів.
+    group_bg.add(&row_background_type);
+    group_bg.add(&preview_stack);
+    group_bg.add(&effects.expander);
+    update_background_rows(settings, &preview_stack, &effects);
     {
-        let row_background_color = row_background_color.clone();
+        let preview_stack = preview_stack.clone();
+        let effects = effects.clone();
         let settings_for_update = settings.clone();
-        let update = move || {
-            let overridden =
-                settings_for_update.day_night_enabled() || settings_for_update.use_desktop_wallpaper();
-            row_background_color.set_sensitive(!overridden);
-        };
-        update();
-
-        let update_a = update.clone();
         settings
             .inner()
-            .connect_changed(Some("day-night-enabled"), move |_, _| update_a());
-
-        let update_b = update.clone();
-        settings
-            .inner()
-            .connect_changed(Some("use-desktop-wallpaper"), move |_, _| update_b());
+            .connect_changed(Some("background-type"), move |_, _| {
+                update_background_rows(&settings_for_update, &preview_stack, &effects);
+            });
     }
 
     page.add(&group_bg);
@@ -72,10 +63,7 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
         2,
     );
     row_min.set_title("Мінімальний масштаб");
-    settings
-        .inner()
-        .bind("min-zoom", &row_min, "value")
-        .build();
+    settings.inner().bind("min-zoom", &row_min, "value").build();
     group_zoom.add(&row_min);
 
     let row_max = adw::SpinRow::new(
@@ -84,10 +72,7 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
         1,
     );
     row_max.set_title("Максимальний масштаб");
-    settings
-        .inner()
-        .bind("max-zoom", &row_max, "value")
-        .build();
+    settings.inner().bind("max-zoom", &row_max, "value").build();
     group_zoom.add(&row_max);
 
     page.add(&group_zoom);
@@ -99,13 +84,17 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
 /// "#RRGGBB" (`with_alpha = false`) або "#RRGGBBAA" (`with_alpha = true`,
 /// напр. для тіні, де прозорість — частина самого налаштування) — сама
 /// кнопка, без обгортки в ActionRow (щоб можна було компонувати кілька
-/// таких кнопок з іконками в одному рядку, як у day_night_row нижче).
+/// таких кнопок у спільному рядку попереднього перегляду кольорів).
 ///
 /// GSettings не має вбудованого типу кольору, а `Settings::bind_with_mapping`
 /// відсутній у поточній версії крейта gio-rs, тому міст string <-> gdk::RGBA
 /// зроблено вручну двома сигналами з прапорцем `updating` проти
 /// зациклення (settings -> button, button -> settings):
-fn color_button(settings: &Settings, key: &'static str, with_alpha: bool) -> gtk4::ColorDialogButton {
+fn color_button(
+    settings: &Settings,
+    key: &'static str,
+    with_alpha: bool,
+) -> gtk4::ColorDialogButton {
     let dialog = gtk4::ColorDialog::builder().with_alpha(with_alpha).build();
     let button = gtk4::ColorDialogButton::new(Some(dialog));
     button.set_valign(gtk4::Align::Center);
@@ -153,73 +142,251 @@ fn color_button(settings: &Settings, key: &'static str, with_alpha: bool) -> gtk
     button
 }
 
-/// ActionRow з однією GtkColorDialogButton як суфіксом (без альфа-каналу).
-fn color_row(settings: &Settings, key: &'static str, title: &str) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title(title).build();
-    let button = color_button(settings, key, false);
-    row.add_suffix(&button);
-    row.set_activatable_widget(Some(&button));
+fn background_type_row(settings: &Settings) -> adw::ActionRow {
+    let row = adw::ActionRow::builder().title("Тип тла").build();
+    let dropdown = gtk4::DropDown::from_strings(&[
+        "Системні кольори",
+        "Користувацькі кольори",
+        "Системні шпалери",
+        "Користувацькі шпалери",
+    ]);
+    dropdown.set_valign(gtk4::Align::Center);
+    dropdown.set_selected(background_type_index(settings.background_type()));
+    row.add_suffix(&dropdown);
+    row.set_activatable_widget(Some(&dropdown));
+
+    let updating = Rc::new(Cell::new(false));
+    {
+        let settings = settings.clone();
+        let updating = updating.clone();
+        dropdown.connect_notify_local(Some("selected"), move |dropdown, _| {
+            if !updating.get() {
+                if let Some(background_type) = background_type_at(dropdown.selected()) {
+                    settings.set_background_type(background_type);
+                }
+            }
+        });
+    }
+    {
+        let dropdown = dropdown.clone();
+        let updating = updating.clone();
+        settings
+            .inner()
+            .connect_changed(Some("background-type"), move |s, _| {
+                updating.set(true);
+                dropdown.set_selected(background_type_index(BackgroundType::from_str(
+                    &s.string("background-type"),
+                )));
+                updating.set(false);
+            });
+    }
     row
 }
 
-/// ActionRow "День / Ніч": дві пари іконка+colorpicker (день/ніч) і
-/// перемикач автоматичного режиму в кінці. Коли перемикач увімкнено,
-/// `Settings::background_color()` сам підставляє day-color/night-color
-/// залежно від системної схеми кольорів. Чутливість самого рядка "Колір
-/// тла" від цього ключа рахується централізовано в build_page() — разом
-/// із залежністю від "Використовувати шпалеру робочого столу".
-fn day_night_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("День / Ніч").build();
+fn background_type_index(background_type: BackgroundType) -> u32 {
+    match background_type {
+        BackgroundType::SystemColors => 0,
+        BackgroundType::CustomColors => 1,
+        BackgroundType::SystemWallpapers => 2,
+        BackgroundType::CustomWallpapers => 3,
+    }
+}
 
-    row.add_suffix(&gtk4::Image::from_icon_name("weather-clear-symbolic"));
-    row.add_suffix(&color_button(settings, "day-color", false));
+fn background_type_at(index: u32) -> Option<BackgroundType> {
+    match index {
+        0 => Some(BackgroundType::SystemColors),
+        1 => Some(BackgroundType::CustomColors),
+        2 => Some(BackgroundType::SystemWallpapers),
+        3 => Some(BackgroundType::CustomWallpapers),
+        _ => None,
+    }
+}
 
-    row.add_suffix(&gtk4::Image::from_icon_name("weather-clear-night-symbolic"));
-    row.add_suffix(&color_button(settings, "night-color", false));
+fn update_background_rows(
+    settings: &Settings,
+    preview_stack: &gtk4::Stack,
+    effects: &BackgroundEffects,
+) {
+    let background_type = settings.background_type();
+    let uses_wallpaper = background_type.uses_wallpaper();
+    let uses_system_colors = background_type == BackgroundType::SystemColors;
 
-    let switch = gtk4::Switch::new();
-    switch.set_valign(gtk4::Align::Center);
-    settings
-        .inner()
-        .bind("day-night-enabled", &switch, "active")
-        .build();
-    row.add_suffix(&switch);
+    match background_type {
+        BackgroundType::CustomColors => {
+            preview_stack.set_visible_child_name("custom-colors");
+            preview_stack.set_visible(true);
+        }
+        BackgroundType::CustomWallpapers => {
+            preview_stack.set_visible_child_name("custom-wallpapers");
+            preview_stack.set_visible(true);
+        }
+        BackgroundType::SystemColors | BackgroundType::SystemWallpapers => {
+            preview_stack.set_visible(false);
+        }
+    }
+    effects
+        .expander
+        .set_sensitive(uses_wallpaper || uses_system_colors);
+    effects
+        .brightness
+        .set_sensitive(uses_wallpaper || uses_system_colors);
+    effects.blur.set_sensitive(uses_wallpaper);
+    effects.saturation.set_sensitive(uses_wallpaper);
+    effects
+        .grain
+        .set_sensitive(uses_wallpaper || uses_system_colors);
+}
 
+fn background_preview_row(settings: &Settings, wallpapers: bool) -> gtk4::Box {
+    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 30);
+    row.set_size_request(-1, 195);
+    row.set_halign(gtk4::Align::Center);
+    row.set_valign(gtk4::Align::Center);
+
+    for (night, label) in [(false, "День"), (true, "Ніч")] {
+        let preview = if wallpapers {
+            wallpaper_preview_button(settings, night)
+        } else {
+            let key = if night { "night-color" } else { "day-color" };
+            let button = color_button(settings, key, false);
+            button.set_size_request(170, 96);
+            button.add_css_class("background-preview");
+            button.upcast::<gtk4::Widget>()
+        };
+
+        let title = gtk4::Label::new(Some(label));
+        let preview_column = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
+        preview_column.set_halign(gtk4::Align::Center);
+        preview_column.append(&preview);
+        preview_column.append(&title);
+        row.append(&preview_column);
+    }
     row
 }
 
-/// ExpanderRow "Використовувати шпалеру робочого столу": перемикач у
-/// кінці головного рядка вмикає режим, дві вкладені сторінки-рядки
-/// ("Корекція яскравості", "Розмиття") — самі повзунки. Коли перемикач
-/// увімкнено, рядок "День / Ніч" (переданий як `day_night_row`) стає
-/// неактивним — тут залежність лише від ОДНОГО ключа, тож звичайний
-/// `.bind(...).invert_boolean()` цілком коректний (на відміну від "Колір
-/// тла", де залежність від ДВОХ ключів одразу — див. build_page()).
-fn wallpaper_row(settings: &Settings, day_night_row: &adw::ActionRow) -> adw::ExpanderRow {
-    let row = adw::ExpanderRow::builder()
-        .title("Використовувати шпалеру робочого столу")
-        .build();
+fn wallpaper_preview_button(settings: &Settings, night: bool) -> gtk4::Widget {
+    let button = gtk4::Button::new();
+    button.set_size_request(170, 96);
+    button.set_overflow(gtk4::Overflow::Hidden);
+    button.add_css_class("background-preview");
+    button.add_css_class("background-image-preview");
 
-    let switch = gtk4::Switch::new();
-    switch.set_valign(gtk4::Align::Center);
-    settings
-        .inner()
-        .bind("use-desktop-wallpaper", &switch, "active")
-        .build();
-    row.add_suffix(&switch);
+    let picture = gtk4::Picture::new();
+    picture.set_size_request(170, 96);
+    picture.set_content_fit(gtk4::ContentFit::Cover);
+    picture.set_can_shrink(true);
+    let setting_key = if night {
+        "custom-wallpaper-night"
+    } else {
+        "custom-wallpaper-day"
+    };
+    set_preview_picture(&picture, &settings.custom_wallpaper(night));
+    button.set_child(Some(&picture));
 
-    row.add_row(&brightness_row(settings));
-    row.add_row(&blur_row(settings));
-    row.add_row(&saturation_row(settings));
-    row.add_row(&grain_row(settings));
+    {
+        let picture = picture.clone();
+        settings
+            .inner()
+            .connect_changed(Some(setting_key), move |s, key| {
+                set_preview_picture(&picture, &s.string(key));
+            });
+    }
+    {
+        let settings = settings.clone();
+        button.connect_clicked(move |button| {
+            let Some(window) = button
+                .root()
+                .and_then(|root| root.downcast::<gtk4::Window>().ok())
+            else {
+                return;
+            };
+            let filter = gtk4::FileFilter::new();
+            filter.set_name(Some("Зображення"));
+            filter.add_mime_type("image/*");
 
-    settings
-        .inner()
-        .bind("use-desktop-wallpaper", day_night_row, "sensitive")
-        .invert_boolean()
-        .build();
+            let dialog = gtk4::FileDialog::builder()
+                .title("Вибрати шпалеру")
+                .modal(true)
+                .build();
+            dialog.set_default_filter(Some(&filter));
+            let settings = settings.clone();
+            dialog.open(
+                Some(&window),
+                None::<&gtk4::gio::Cancellable>,
+                move |result| match result {
+                    Ok(file) => {
+                        let Some(path) = file.path() else {
+                            eprintln!("Не вдалося визначити шлях до вибраної шпалери");
+                            return;
+                        };
+                        if let Err(error) = gtk4::gdk_pixbuf::Pixbuf::from_file(&path) {
+                            eprintln!("Не вдалося відкрити вибрану шпалеру: {error}");
+                            return;
+                        }
+                        settings.set_custom_wallpaper(night, &path.to_string_lossy());
+                    }
+                    Err(error) if !error.matches(gtk4::gio::IOErrorEnum::Cancelled) => {
+                        eprintln!("Не вдалося вибрати шпалеру: {error}");
+                    }
+                    Err(_) => {}
+                },
+            );
+        });
+    }
+    button.upcast()
+}
 
-    row
+fn set_preview_picture(picture: &gtk4::Picture, path: &str) {
+    if path.is_empty() {
+        picture.set_file(None::<&gtk4::gio::File>);
+    } else {
+        picture.set_file(Some(&gtk4::gio::File::for_path(path)));
+    }
+}
+
+fn add_background_preview_styles() {
+    let Some(display) = gtk4::gdk::Display::default() else {
+        return;
+    };
+    let provider = gtk4::CssProvider::new();
+    provider.load_from_data(
+        "button.background-preview { min-width: 170px; min-height: 96px; padding: 0; border: none; outline: none; box-shadow: none; border-radius: 12px; }",
+    );
+    gtk4::style_context_add_provider_for_display(
+        &display,
+        &provider,
+        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+}
+
+#[derive(Clone)]
+struct BackgroundEffects {
+    expander: adw::ExpanderRow,
+    brightness: adw::ActionRow,
+    blur: adw::ActionRow,
+    saturation: adw::ActionRow,
+    grain: adw::ActionRow,
+}
+
+fn wallpaper_row(settings: &Settings) -> BackgroundEffects {
+    let expander = adw::ExpanderRow::builder().title("Ефекти тла").build();
+    let brightness = brightness_row(settings);
+    let blur = blur_row(settings);
+    let saturation = saturation_row(settings);
+    let grain = grain_row(settings);
+
+    expander.add_row(&brightness);
+    expander.add_row(&blur);
+    expander.add_row(&saturation);
+    expander.add_row(&grain);
+
+    BackgroundEffects {
+        expander,
+        brightness,
+        blur,
+        saturation,
+        grain,
+    }
 }
 
 /// ActionRow з повзунком "Корекція яскравості": -100% (темніше) ..
@@ -227,7 +394,9 @@ fn wallpaper_row(settings: &Settings, day_night_row: &adw::ActionRow) -> adw::Ex
 /// дешевий напівпрозорий чорний/білий шар поверх шпалери в renderer.rs —
 /// самого повзунка це не стосується, лише зберігає значення в GSettings.
 fn brightness_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("Корекція яскравості").build();
+    let row = adw::ActionRow::builder()
+        .title("Корекція яскравості")
+        .build();
 
     let adjustment = gtk4::Adjustment::new(0.0, -100.0, 100.0, 1.0, 5.0, 0.0);
     let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
@@ -332,16 +501,46 @@ fn shadow_row(settings: &Settings) -> adw::ExpanderRow {
         .build();
     row.add_suffix(&switch);
 
-    row.add_row(&slider_row(settings, "Зміщення по горизонталі", "shadow-offset-x", -100.0, 100.0));
-    row.add_row(&slider_row(settings, "Зміщення по вертикалі", "shadow-offset-y", -100.0, 100.0));
-    row.add_row(&slider_row(settings, "Радіус розмиття", "shadow-blur-radius", 0.0, 100.0));
-    row.add_row(&slider_row(settings, "Радіус розтягування", "shadow-spread-radius", 0.0, 100.0));
+    row.add_row(&slider_row(
+        settings,
+        "Зміщення по горизонталі",
+        "shadow-offset-x",
+        -100.0,
+        100.0,
+    ));
+    row.add_row(&slider_row(
+        settings,
+        "Зміщення по вертикалі",
+        "shadow-offset-y",
+        -100.0,
+        100.0,
+    ));
+    row.add_row(&slider_row(
+        settings,
+        "Радіус розмиття",
+        "shadow-blur-radius",
+        0.0,
+        100.0,
+    ));
+    row.add_row(&slider_row(
+        settings,
+        "Радіус розтягування",
+        "shadow-spread-radius",
+        0.0,
+        100.0,
+    ));
 
     let row_color = adw::ActionRow::builder().title("Колір").build();
     row_color.add_suffix(&color_button(settings, "shadow-color", true));
     row.add_row(&row_color);
 
-    row.add_row(&slider_row(settings, "Прозорість", "shadow-opacity", 0.0, 100.0));
+    row.add_row(&slider_row(
+        settings,
+        "Прозорість",
+        "shadow-opacity",
+        0.0,
+        100.0,
+    ));
 
     row
 }
@@ -351,7 +550,13 @@ fn shadow_row(settings: &Settings) -> adw::ExpanderRow {
 /// розтягування, прозорість) — самі лише назва/ключ/діапазон різняться,
 /// початкове значення повзунка (перш ніж bind() перепише його реальним з
 /// GSettings) тут не важливе.
-fn slider_row(settings: &Settings, title: &str, key: &'static str, min: f64, max: f64) -> adw::ActionRow {
+fn slider_row(
+    settings: &Settings,
+    title: &str,
+    key: &'static str,
+    min: f64,
+    max: f64,
+) -> adw::ActionRow {
     let row = adw::ActionRow::builder().title(title).build();
 
     let adjustment = gtk4::Adjustment::new(min, min, max, 1.0, 5.0, 0.0);
@@ -386,7 +591,7 @@ fn padding_row(settings: &Settings) -> adw::ActionRow {
 
     settings
         .inner()
-        .bind("image-padding", &adjustment, "value")   // ← адресат: adjustment, не scale
+        .bind("image-padding", &adjustment, "value") // ← адресат: adjustment, не scale
         .build();
 
     row.add_suffix(&scale);
@@ -396,7 +601,9 @@ fn padding_row(settings: &Settings) -> adw::ActionRow {
 /// ActionRow з повзунком, прив'язаним до ключа "image-corner-radius" —
 /// радіус заокруглення кутів зображення при відображенні.
 fn corner_radius_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("Заокруглення кутів").build();
+    let row = adw::ActionRow::builder()
+        .title("Заокруглення кутів")
+        .build();
 
     let adjustment = gtk4::Adjustment::new(0.0, 0.0, 20.0, 1.0, 1.0, 0.0);
     let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));

@@ -48,6 +48,21 @@
       <description>Колір тла вікна перегляду у форматі #RRGGBB.</description>
     </key>
 
+    <key name="background-type" type="s">
+      <default>'system-colors'</default>
+      <summary>Тип тла вікна перегляду</summary>
+    </key>
+
+    <key name="custom-wallpaper-day" type="s">
+      <default>''</default>
+      <summary>Користувацька шпалера для дня</summary>
+    </key>
+
+    <key name="custom-wallpaper-night" type="s">
+      <default>''</default>
+      <summary>Користувацька шпалера для ночі</summary>
+    </key>
+
     <key name="day-night-enabled" type="b">
       <default>false</default>
       <summary>Автоматично перемикати колір тла день/ніч</summary>
