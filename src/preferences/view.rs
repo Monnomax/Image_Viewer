@@ -19,37 +19,30 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
 
     add_background_preview_styles();
     let row_background_type = background_type_row(settings);
-    let row_custom_colors = background_preview_row(settings, false);
-    let row_custom_wallpapers = background_preview_row(settings, true);
-    let preview_stack = gtk4::Stack::new();
-    preview_stack.add_named(&row_custom_colors, Some("custom-colors"));
-    preview_stack.add_named(&row_custom_wallpapers, Some("custom-wallpapers"));
-    preview_stack.set_margin_top(28);
-    preview_stack.set_margin_bottom(28);
-    preview_stack.set_margin_start(28);
-    preview_stack.set_margin_end(28);
+    let (preview_row, previews) = background_preview_row(settings);
+    preview_row.set_margin_top(28);
+    preview_row.set_margin_bottom(28);
+    preview_row.set_margin_start(28);
+    preview_row.set_margin_end(28);
 
-    let preview_row = adw::PreferencesRow::builder().child(&preview_stack).build();
+    let preferences_row = adw::PreferencesRow::builder().child(&preview_row).build();
+
+    preferences_row.set_hexpand(true);
     let effects = wallpaper_row(settings);
 
     group_bg.add(&row_background_type);
-    group_bg.add(&preview_row);
+    group_bg.add(&preferences_row);
     group_bg.add(&effects);
-    update_background_rows(settings, &preview_row, &preview_stack, &effects);
+    update_background_rows(settings, &preferences_row, &previews, &effects);
     {
-        let preview_row = preview_row.clone();
-        let preview_stack = preview_stack.clone();
+        let preferences_row = preferences_row.clone();
+        let previews = previews.clone();
         let effects = effects.clone();
         let settings_for_update = settings.clone();
         settings
             .inner()
             .connect_changed(Some("background-type"), move |_, _| {
-                update_background_rows(
-                    &settings_for_update,
-                    &preview_row,
-                    &preview_stack,
-                    &effects,
-                );
+                update_background_rows(&settings_for_update, &preferences_row, &previews, &effects);
             });
     }
 
@@ -217,7 +210,7 @@ fn background_type_at(index: u32) -> Option<BackgroundType> {
 fn update_background_rows(
     settings: &Settings,
     preview_row: &adw::PreferencesRow,
-    preview_stack: &gtk4::Stack,
+    previews: &BackgroundPreviews,
     effects: &adw::ExpanderRow,
 ) {
     let background_type = settings.background_type();
@@ -225,11 +218,17 @@ fn update_background_rows(
 
     match background_type {
         BackgroundType::CustomColors => {
-            preview_stack.set_visible_child_name("custom-colors");
+            previews.day_color.set_visible(true);
+            previews.day_wallpaper.set_visible(false);
+            previews.night_color.set_visible(true);
+            previews.night_wallpaper.set_visible(false);
             preview_row.set_visible(true);
         }
         BackgroundType::CustomWallpapers => {
-            preview_stack.set_visible_child_name("custom-wallpapers");
+            previews.day_color.set_visible(false);
+            previews.day_wallpaper.set_visible(true);
+            previews.night_color.set_visible(false);
+            previews.night_wallpaper.set_visible(true);
             preview_row.set_visible(true);
         }
         BackgroundType::SystemColors | BackgroundType::SystemWallpapers => {
@@ -239,53 +238,74 @@ fn update_background_rows(
     effects.set_visible(uses_wallpaper);
 }
 
-fn background_preview_row(settings: &Settings, wallpapers: bool) -> gtk4::Box {
+#[derive(Clone)]
+struct BackgroundPreviews {
+    day_color: gtk4::Widget,
+    day_wallpaper: gtk4::Widget,
+    night_color: gtk4::Widget,
+    night_wallpaper: gtk4::Widget,
+}
+
+fn background_preview_row(settings: &Settings) -> (gtk4::Box, BackgroundPreviews) {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 30);
     row.set_halign(gtk4::Align::Fill);
-    row.set_valign(gtk4::Align::Center);
     row.set_hexpand(true);
 
     let ratio = monitor_aspect_ratio();
+    let (day_column, day_color, day_wallpaper) =
+        background_preview_column(settings, false, "День", ratio);
+    let (night_column, night_color, night_wallpaper) =
+        background_preview_column(settings, true, "Ніч", ratio);
+    row.append(&day_column);
+    row.append(&night_column);
 
-    for (night, label) in [(false, "День"), (true, "Ніч")] {
-        let preview = if wallpapers {
-            wallpaper_preview_button(settings, night)
-        } else {
-            let key = if night { "night-color" } else { "day-color" };
-            let button = color_button(settings, key, false);
-            button.add_css_class("background-preview");
-            button.upcast::<gtk4::Widget>()
-        };
+    (
+        row,
+        BackgroundPreviews {
+            day_color,
+            day_wallpaper,
+            night_color,
+            night_wallpaper,
+        },
+    )
+}
 
+fn background_preview_column(
+    settings: &Settings,
+    night: bool,
+    label: &str,
+    ratio: f32,
+) -> (gtk4::Box, gtk4::Widget, gtk4::Widget) {
+    let color_key = if night { "night-color" } else { "day-color" };
+    let color_preview = color_button(settings, color_key, false);
+    color_preview.add_css_class("background-preview");
+    let color_preview = color_preview.upcast::<gtk4::Widget>();
+    let wallpaper_preview = wallpaper_preview_button(settings, night);
+    for preview in [&color_preview, &wallpaper_preview] {
         preview.set_hexpand(true);
         preview.set_vexpand(true);
-
-        let frame = gtk4::AspectFrame::new(
-            0.5,
-            0.5,
-            ratio,
-            false,
-        );
-        frame.set_hexpand(true);
-        frame.set_halign(gtk4::Align::Fill);
-        frame.set_valign(gtk4::Align::Center);
-        frame.set_child(Some(&preview));
-
-        let title = gtk4::Label::new(Some(label));
-
-        let preview_column =
-            gtk4::Box::new(gtk4::Orientation::Vertical, 8);
-        preview_column.set_hexpand(true);
-        preview_column.set_halign(gtk4::Align::Fill);
-        preview_column.set_valign(gtk4::Align::Center);
-
-        preview_column.append(&frame);
-        preview_column.append(&title);
-
-        row.append(&preview_column);
     }
 
-    row
+    let overlay = gtk4::Overlay::new();
+    overlay.set_child(Some(&color_preview));
+    overlay.add_overlay(&wallpaper_preview);
+    overlay.set_hexpand(true);
+    overlay.set_vexpand(true);
+
+    let frame = gtk4::AspectFrame::new(0.5, 0.5, ratio, false);
+    frame.set_hexpand(true);
+    frame.set_halign(gtk4::Align::Fill);
+    frame.set_valign(gtk4::Align::Start);
+    frame.set_child(Some(&overlay));
+
+    let column = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
+    column.set_hexpand(true);
+    column.set_halign(gtk4::Align::Fill);
+    column.set_valign(gtk4::Align::Start);
+    column.append(&frame);
+    column.append(&gtk4::Label::new(Some(label)));
+
+    (column, color_preview, wallpaper_preview)
 }
 
 fn wallpaper_preview_button(settings: &Settings, night: bool) -> gtk4::Widget {
