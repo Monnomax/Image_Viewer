@@ -92,12 +92,17 @@ fn setup_drag_and_drop(
     window.add_controller(drop_target);
 }
 
-pub fn build(app: &Application, path_arg: Option<String>) {
+pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool) {
     overlays::install_css();
 
-    let (images, index) = utils::resolve_path_arg(path_arg);
-
     let settings = Settings::new();
+    let windows_to_close = if replace_existing && settings.single_instance() {
+        app.windows()
+    } else {
+        Vec::new()
+    };
+
+    let (images, index) = utils::resolve_path_arg(path_arg);
 
     let mut model = Model::new(images, index);
     model.sort_by(settings.sort_mode());
@@ -653,4 +658,8 @@ pub fn build(app: &Application, path_arg: Option<String>) {
         window.fullscreen();
     }
     canvas.grab_focus();
+
+    for window in windows_to_close {
+        window.close();
+    }
 }

@@ -10,6 +10,12 @@
       <description>Відкривати вікно переглядача одразу в повноекранному режимі.</description>
     </key>
 
+    <key name="single-instance" type="b">
+      <default>false</default>
+      <summary>Дозволити лише один екземпляр</summary>
+      <description>Закривати попередні вікна перегляду під час відкриття нового зображення.</description>
+    </key>
+
     <key name="remember-zoom" type="b">
       <default>false</default>
       <summary>Запам'ятовувати масштаб</summary>

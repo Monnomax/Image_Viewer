@@ -105,13 +105,23 @@ fn main() -> glib::ExitCode {
     // 2. Використовуємо gtk4::Application для точної сумісності з app::build
     let application = Application::builder()
         .application_id("com.example.ImgViewer")
+        .flags(gtk4::gio::ApplicationFlags::HANDLES_OPEN)
         .build();
 
     application.connect_activate(|app| {
-        let args: Vec<String> = std::env::args().collect();
-        let path_arg = args.get(1).cloned();
-        app::build(app, path_arg);
+        if let Some(window) = app.active_window() {
+            window.present();
+        } else {
+            app::build(app, None, false);
+        }
     });
 
-    application.run_with_args::<String>(&[])
+    application.connect_open(|app, files, _hint| {
+        let path = files.first().and_then(|file| file.path());
+        if let Some(path) = path {
+            app::build(app, Some(path.to_string_lossy().into_owned()), true);
+        }
+    });
+
+    application.run()
 }

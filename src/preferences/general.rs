@@ -29,6 +29,15 @@ where
         .build();
     group_state.add(&row_fullscreen);
 
+    let row_single_instance = adw::SwitchRow::builder()
+        .title("Дозволити лише один екземпляр")
+        .build();
+    settings
+        .inner()
+        .bind("single-instance", &row_single_instance, "active")
+        .build();
+    group_state.add(&row_single_instance);
+
     let row_remember_zoom = adw::SwitchRow::builder()
         .title("Запам'ятовувати масштаб")
         .build();

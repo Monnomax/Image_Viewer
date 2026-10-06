@@ -361,6 +361,10 @@ impl Settings {
         self.0.boolean("fullscreen-on-start")
     }
 
+    pub fn single_instance(&self) -> bool {
+        self.0.boolean("single-instance")
+    }
+
     pub fn remember_zoom(&self) -> bool {
         self.0.boolean("remember-zoom")
     }
