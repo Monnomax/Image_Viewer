@@ -3,7 +3,9 @@
 use crate::preferences::settings::{
     parse_hex_color, rgba_to_hex, rgba_to_hex_alpha, BackgroundType, Settings,
 };
-use crate::preferences::regulator::button_regulator_row as make_button_regulator_row;
+use crate::preferences::regulator::{
+    button_regulator_row as make_button_regulator_row, button_regulator_row_custom,
+};
 use adw::prelude::*;
 use gtk4::gdk;
 use gtk4::glib;
@@ -182,7 +184,12 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
         .inner()
         .bind("min-zoom", &min_zoom, "value")
         .build();
-    let row_min = make_button_regulator_row("Мінімальний масштаб", &min_zoom, 0.01, 2);
+    let row_min = button_regulator_row_custom(
+        "Мінімальний масштаб",
+        &min_zoom,
+        |value| format!("{:.0} %", value * 100.0),
+        |_| 0.01,
+    );
     group_zoom.add(&row_min);
 
     let max_zoom = gtk4::Adjustment::new(40.0, 1.0, 100.0, 1.0, 5.0, 0.0);
@@ -190,7 +197,21 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
         .inner()
         .bind("max-zoom", &max_zoom, "value")
         .build();
-    let row_max = make_button_regulator_row("Максимальний масштаб", &max_zoom, 1.0, 1);
+    let row_max = button_regulator_row_custom(
+        "Максимальний масштаб",
+        &max_zoom,
+        |value| format!("{:.0} %", value * 100.0),
+        |value| {
+            let percent = value * 100.0;
+            if percent <= 1000.0 {
+                0.1
+            } else if percent <= 5000.0 {
+                1.0
+            } else {
+                5.0
+            }
+        },
+    );
     group_zoom.add(&row_max);
 
     page.add(&group_zoom);

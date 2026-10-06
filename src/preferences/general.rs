@@ -38,15 +38,6 @@ where
         .build();
     group_state.add(&row_single_instance);
 
-    let row_remember_zoom = adw::SwitchRow::builder()
-        .title("Запам'ятовувати масштаб")
-        .build();
-    settings
-        .inner()
-        .bind("remember-zoom", &row_remember_zoom, "active")
-        .build();
-    group_state.add(&row_remember_zoom);
-
     let row_remember_pos = adw::SwitchRow::builder()
         .title("Запам'ятовувати положення")
         .build();
@@ -55,6 +46,15 @@ where
         .bind("remember-position", &row_remember_pos, "active")
         .build();
     group_state.add(&row_remember_pos);
+
+    let row_remember_zoom = adw::SwitchRow::builder()
+        .title("Запам'ятовувати масштаб")
+        .build();
+    settings
+        .inner()
+        .bind("remember-zoom", &row_remember_zoom, "active")
+        .build();
+    group_state.add(&row_remember_zoom);
 
     page.add(&group_state);
 

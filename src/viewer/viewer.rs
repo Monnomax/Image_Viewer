@@ -126,8 +126,15 @@ impl Viewer {
         };
 
         if self.settings.remember_zoom() {
-            self.view_state.scale = stored.scale;
-            self.render_state.scale = stored.scale;
+            let min_zoom = self.settings.min_zoom();
+            let max_zoom = self.settings.max_zoom();
+            let scale = if stored.scale.is_finite() {
+                stored.scale.clamp(min_zoom, max_zoom)
+            } else {
+                1.0
+            };
+            self.view_state.scale = scale;
+            self.render_state.scale = scale;
         }
         if self.settings.remember_position() {
             self.view_state.offset_x = stored.offset_x;
@@ -137,6 +144,7 @@ impl Viewer {
         }
 
         self.sync_zoom_animation_to_render_state();
+        self.clamp_zoom_to_limits();
     }
 
     pub fn save_current_view_state(&mut self) {
@@ -592,6 +600,46 @@ impl Viewer {
 
     // ---- Масштаб і панорамування ---------------------------------------
 
+    /// Примусово повертає поточний ручний масштаб у дозволений діапазон.
+    /// Режим "вписати в екран" сам по собі цими межами не обмежується.
+    pub fn clamp_zoom_to_limits(&mut self) {
+        let min_zoom = self.settings.min_zoom();
+        let max_zoom = self.settings.max_zoom().max(min_zoom);
+        let current_scale = self.render_state.scale;
+
+        if !current_scale.is_finite() {
+            return;
+        }
+
+        let new_scale = current_scale.clamp(min_zoom, max_zoom);
+        if (new_scale - current_scale).abs() <= self.zoom_animation.epsilon {
+            return;
+        }
+
+        let win_w = if self.window_width > 0.0 {
+            self.window_width
+        } else {
+            self.win_w as f64
+        };
+        let win_h = if self.window_height > 0.0 {
+            self.window_height
+        } else {
+            self.win_h as f64
+        };
+        let (ax, ay) = (win_w / 2.0, win_h / 2.0);
+        let old_scale = current_scale.max(1e-6);
+        let img_x = (ax - self.render_state.offset_x) / old_scale;
+        let img_y = (ay - self.render_state.offset_y) / old_scale;
+        let new_offset_x = ax - img_x * new_scale;
+        let new_offset_y = ay - img_y * new_scale;
+
+        self.view_state = ViewState::new(new_scale, new_offset_x, new_offset_y);
+        self.is_100 = (new_scale - 1.0).abs() <= self.zoom_animation.epsilon;
+        self.zoom_animation
+            .set_target(new_scale, new_offset_x, new_offset_y);
+        self.save_current_view_state();
+    }
+
     pub fn fit_to_screen(&mut self) {
         self.is_100 = false;
         let Some(state) = self.fit_view_state() else {
@@ -727,7 +775,9 @@ impl Viewer {
         }
         let (ax, ay) = anchor;
         let old_scale = self.render_state.scale.max(1e-6);
-        let new_scale = (old_scale * factor).clamp(0.02, 40.0);
+        let min_zoom = self.settings.min_zoom();
+        let max_zoom = self.settings.max_zoom().max(min_zoom);
+        let new_scale = (old_scale * factor).clamp(min_zoom, max_zoom);
         let img_x = (ax - self.render_state.offset_x) / old_scale;
         let img_y = (ay - self.render_state.offset_y) / old_scale;
         let new_offset_x = ax - img_x * new_scale;

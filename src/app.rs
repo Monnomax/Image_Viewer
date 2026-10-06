@@ -533,6 +533,9 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             if key == "remember-zoom" || key == "remember-position" {
                 viewer_clone.borrow_mut().restore_current_view_state();
             }
+            if key == "min-zoom" || key == "max-zoom" {
+                viewer_clone.borrow_mut().clamp_zoom_to_limits();
+            }
             if key == "nav-buttons-visibility-mode"
                 || key == "show-nav-buttons"
                 || key == "hide-cursor-timeout-ms"
