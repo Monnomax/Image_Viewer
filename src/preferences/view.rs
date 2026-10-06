@@ -216,8 +216,14 @@ fn color_button(
 ) -> gtk4::ColorDialogButton {
     let dialog = gtk4::ColorDialog::builder().with_alpha(with_alpha).build();
     let button = gtk4::ColorDialogButton::new(Some(dialog));
-    button.set_valign(gtk4::Align::Center);
-    button.set_rgba(&parse_hex_color(&settings.inner().string(key)).unwrap_or(gdk::RGBA::BLACK));
+button.set_hexpand(true);
+button.set_vexpand(true);
+button.set_halign(gtk4::Align::Fill);
+button.set_valign(gtk4::Align::Fill);
+button.set_rgba(
+    &parse_hex_color(&settings.inner().string(key))
+        .unwrap_or(gdk::RGBA::BLACK),
+);
 
     let updating = Rc::new(Cell::new(false));
 
