@@ -5,8 +5,121 @@ use crate::preferences::settings::{
 };
 use adw::prelude::*;
 use gtk4::gdk;
-use std::cell::Cell;
+use gtk4::glib;
+use gtk4::subclass::prelude::*;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+
+mod background_preview_imp {
+    use super::*;
+
+    #[derive(Default)]
+    pub struct BackgroundPreview {
+        pub child: RefCell<Option<gtk4::Widget>>,
+        pub ratio: Cell<f32>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for BackgroundPreview {
+        const NAME: &'static str = "ImgViewerBackgroundPreview";
+        type Type = super::BackgroundPreview;
+        type ParentType = gtk4::Widget;
+    }
+
+    impl ObjectImpl for BackgroundPreview {
+        fn dispose(&self) {
+            if let Some(child) = self.child.borrow_mut().take() {
+                child.unparent();
+            }
+        }
+    }
+
+    impl WidgetImpl for BackgroundPreview {
+        fn request_mode(&self) -> gtk4::SizeRequestMode {
+            gtk4::SizeRequestMode::HeightForWidth
+        }
+
+        fn measure(
+            &self,
+            orientation: gtk4::Orientation,
+            for_size: i32,
+        ) -> (i32, i32, i32, i32) {
+            const NATURAL_WIDTH: i32 = 256;
+
+            match orientation {
+                gtk4::Orientation::Horizontal => {
+                    // Як у GNOME CcBackgroundPreview:
+                    // мінімальна ширина = 0,
+                    // природна ширина = 256.
+                    (0, NATURAL_WIDTH, -1, -1)
+                }
+
+                gtk4::Orientation::Vertical => {
+                    let width = if for_size >= 0 {
+                        for_size
+                    } else {
+                        NATURAL_WIDTH
+                    };
+
+                    let ratio = self.ratio.get().max(0.01);
+                    let height = (width as f32 / ratio).round() as i32;
+
+                    (height, height, -1, -1)
+                }
+
+                _ => (0, 0, -1, -1),
+            }
+        }
+
+        fn size_allocate(
+            &self,
+            width: i32,
+            height: i32,
+            baseline: i32,
+        ) {
+            self.parent_size_allocate(width, height, baseline);
+
+            if let Some(child) = self.child.borrow().as_ref() {
+                child.allocate(width, height, baseline, None);
+            }
+        }
+    }
+}
+
+glib::wrapper! {
+    pub struct BackgroundPreview(
+        ObjectSubclass<background_preview_imp::BackgroundPreview>
+    ) @extends gtk4::Widget;
+}
+
+impl BackgroundPreview {
+    fn new(ratio: f32) -> Self {
+        let preview: Self = glib::Object::builder().build();
+
+        preview.imp().ratio.set(ratio);
+        preview.set_hexpand(true);
+        preview.set_halign(gtk4::Align::Fill);
+
+        preview
+    }
+
+    fn set_child(&self, child: Option<&gtk4::Widget>) {
+        let imp = self.imp();
+
+        if let Some(old_child) = imp.child.borrow_mut().take() {
+            old_child.unparent();
+        }
+
+        if let Some(child) = child {
+            child.set_parent(self);
+            child.set_hexpand(true);
+            child.set_vexpand(true);
+            *imp.child.borrow_mut() = Some(child.clone());
+        }
+
+        self.queue_resize();
+    }
+}
 
 pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
     let page = adw::PreferencesPage::builder()
@@ -219,28 +332,42 @@ fn update_background_rows(
 
     match background_type {
         BackgroundType::CustomColors => {
-            previews.day_color.set_visible(true);
-            previews.day_wallpaper.set_visible(false);
-            previews.night_color.set_visible(true);
-            previews.night_wallpaper.set_visible(false);
+            previews
+                .day_preview
+                .set_child(Some(&previews.day_color));
+
+            previews
+                .night_preview
+                .set_child(Some(&previews.night_color));
+
             preview_row.set_visible(true);
         }
+
         BackgroundType::CustomWallpapers => {
-            previews.day_color.set_visible(false);
-            previews.day_wallpaper.set_visible(true);
-            previews.night_color.set_visible(false);
-            previews.night_wallpaper.set_visible(true);
+            previews
+                .day_preview
+                .set_child(Some(&previews.day_wallpaper));
+
+            previews
+                .night_preview
+                .set_child(Some(&previews.night_wallpaper));
+
             preview_row.set_visible(true);
         }
+
         BackgroundType::SystemColors | BackgroundType::SystemWallpapers => {
             preview_row.set_visible(false);
         }
     }
+
     effects.set_visible(uses_wallpaper);
 }
 
 #[derive(Clone)]
 struct BackgroundPreviews {
+    day_preview: BackgroundPreview,
+    night_preview: BackgroundPreview,
+
     day_color: gtk4::Widget,
     day_wallpaper: gtk4::Widget,
     night_color: gtk4::Widget,
@@ -249,27 +376,35 @@ struct BackgroundPreviews {
 
 fn background_preview_row(settings: &Settings) -> (gtk4::Grid, BackgroundPreviews) {
     let row = gtk4::Grid::new();
+
     row.set_halign(gtk4::Align::Fill);
     row.set_hexpand(true);
     row.set_column_homogeneous(true);
     row.set_column_spacing(24);
     row.set_row_spacing(12);
+
+    // Відступи такі ж, як у GNOME Settings.
     row.set_margin_start(12);
     row.set_margin_end(12);
     row.set_margin_top(18);
     row.set_margin_bottom(12);
 
     let ratio = monitor_aspect_ratio();
-    let (day_column, day_color, day_wallpaper) =
+
+    let (day_column, day_preview, day_color, day_wallpaper) =
         background_preview_column(settings, false, "День", ratio);
-    let (night_column, night_color, night_wallpaper) =
+
+    let (night_column, night_preview, night_color, night_wallpaper) =
         background_preview_column(settings, true, "Ніч", ratio);
+
     row.attach(&day_column, 0, 0, 1, 1);
     row.attach(&night_column, 1, 0, 1, 1);
 
     (
         row,
         BackgroundPreviews {
+            day_preview,
+            night_preview,
             day_color,
             day_wallpaper,
             night_color,
@@ -283,37 +418,50 @@ fn background_preview_column(
     night: bool,
     label: &str,
     ratio: f32,
-) -> (gtk4::Box, gtk4::Widget, gtk4::Widget) {
-    let color_key = if night { "night-color" } else { "day-color" };
+) -> (
+    gtk4::Box,
+    BackgroundPreview,
+    gtk4::Widget,
+    gtk4::Widget,
+) {
+    let color_key = if night {
+        "night-color"
+    } else {
+        "day-color"
+    };
+
     let color_preview = color_button(settings, color_key, false);
     color_preview.add_css_class("background-preview");
+
     let color_preview = color_preview.upcast::<gtk4::Widget>();
+
     let wallpaper_preview = wallpaper_preview_button(settings, night);
-    for preview in [&color_preview, &wallpaper_preview] {
-        preview.set_hexpand(true);
-        preview.set_vexpand(true);
-    }
 
-    let overlay = gtk4::Overlay::new();
-    overlay.set_child(Some(&color_preview));
-    overlay.add_overlay(&wallpaper_preview);
-    overlay.set_hexpand(true);
-    overlay.set_vexpand(true);
+    let preview = BackgroundPreview::new(ratio);
 
-    let frame = gtk4::AspectFrame::new(0.5, 0.5, ratio, false);
-    frame.set_hexpand(true);
-    frame.set_halign(gtk4::Align::Fill);
-    frame.set_valign(gtk4::Align::Start);
-    frame.set_child(Some(&overlay));
+    // Початковий child.
+    preview.set_child(Some(&color_preview));
 
-    let column = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
-    column.set_hexpand(true);
+    let title = gtk4::Label::new(Some(label));
+
+    let column = gtk4::Box::new(
+        gtk4::Orientation::Vertical,
+        8,
+    );
+
     column.set_halign(gtk4::Align::Fill);
     column.set_valign(gtk4::Align::Start);
-    column.append(&frame);
-    column.append(&gtk4::Label::new(Some(label)));
+    column.set_hexpand(true);
 
-    (column, color_preview, wallpaper_preview)
+    column.append(&preview);
+    column.append(&title);
+
+    (
+        column,
+        preview,
+        color_preview,
+        wallpaper_preview,
+    )
 }
 
 fn wallpaper_preview_button(settings: &Settings, night: bool) -> gtk4::Widget {
