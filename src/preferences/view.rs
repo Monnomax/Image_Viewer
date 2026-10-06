@@ -215,14 +215,10 @@ fn color_button(
 ) -> gtk4::ColorDialogButton {
     let dialog = gtk4::ColorDialog::builder().with_alpha(with_alpha).build();
     let button = gtk4::ColorDialogButton::new(Some(dialog));
-button.set_hexpand(true);
-button.set_vexpand(true);
-button.set_halign(gtk4::Align::Fill);
-button.set_valign(gtk4::Align::Fill);
-button.set_rgba(
-    &parse_hex_color(&settings.inner().string(key))
-        .unwrap_or(gdk::RGBA::BLACK),
-);
+    button.set_rgba(
+        &parse_hex_color(&settings.inner().string(key))
+            .unwrap_or(gdk::RGBA::BLACK),
+    );
 
     let updating = Rc::new(Cell::new(false));
 
@@ -436,6 +432,10 @@ fn background_preview_column(
     };
 
     let color_preview = color_button(settings, color_key, false);
+    color_preview.set_hexpand(true);
+    color_preview.set_vexpand(true);
+    color_preview.set_halign(gtk4::Align::Fill);
+    color_preview.set_valign(gtk4::Align::Fill);
     color_preview.add_css_class("background-preview");
 
     let color_preview = color_preview.upcast::<gtk4::Widget>();
