@@ -19,13 +19,14 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
 
     add_background_preview_styles();
     let row_background_type = background_type_row(settings);
-    let (preview_row, previews) = background_preview_row(settings);
-    preview_row.set_margin_top(28);
-    preview_row.set_margin_bottom(28);
-    preview_row.set_margin_start(28);
-    preview_row.set_margin_end(28);
+    let (preview_grid, previews) = background_preview_row(settings);
+    let preview_clamp = adw::Clamp::builder()
+        .maximum_size(400)
+        .tightening_threshold(300)
+        .child(&preview_grid)
+        .build();
 
-    let preferences_row = adw::PreferencesRow::builder().child(&preview_row).build();
+    let preferences_row = adw::PreferencesRow::builder().child(&preview_clamp).build();
 
     preferences_row.set_hexpand(true);
     let effects = wallpaper_row(settings);
@@ -246,18 +247,25 @@ struct BackgroundPreviews {
     night_wallpaper: gtk4::Widget,
 }
 
-fn background_preview_row(settings: &Settings) -> (gtk4::Box, BackgroundPreviews) {
-    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 30);
+fn background_preview_row(settings: &Settings) -> (gtk4::Grid, BackgroundPreviews) {
+    let row = gtk4::Grid::new();
     row.set_halign(gtk4::Align::Fill);
     row.set_hexpand(true);
+    row.set_column_homogeneous(true);
+    row.set_column_spacing(24);
+    row.set_row_spacing(12);
+    row.set_margin_start(12);
+    row.set_margin_end(12);
+    row.set_margin_top(18);
+    row.set_margin_bottom(12);
 
     let ratio = monitor_aspect_ratio();
     let (day_column, day_color, day_wallpaper) =
         background_preview_column(settings, false, "День", ratio);
     let (night_column, night_color, night_wallpaper) =
         background_preview_column(settings, true, "Ніч", ratio);
-    row.append(&day_column);
-    row.append(&night_column);
+    row.attach(&day_column, 0, 0, 1, 1);
+    row.attach(&night_column, 1, 0, 1, 1);
 
     (
         row,
