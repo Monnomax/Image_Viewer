@@ -1,6 +1,7 @@
 // preferences/animations.rs — розділ "Анімації": перехід між зображеннями
 // (crossfade) і плавне масштабування.
 
+use crate::preferences::regulator::button_regulator_row;
 use crate::preferences::settings::{CrossfadeEasing, Settings, TransitionAnimation};
 use adw::prelude::*;
 
@@ -234,16 +235,13 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
         .build();
     group_zoom.add(&row_smooth);
 
-    let row_anim_dur = adw::SpinRow::new(
-        Some(&gtk4::Adjustment::new(200.0, 0.0, 2000.0, 10.0, 50.0, 0.0)),
-        10.0,
-        0,
-    );
-    row_anim_dur.set_title("Тривалість анімацій (мс)");
+    let animation_duration = gtk4::Adjustment::new(200.0, 0.0, 2000.0, 10.0, 50.0, 0.0);
     settings
         .inner()
-        .bind("animation-duration-ms", &row_anim_dur, "value")
+        .bind("animation-duration-ms", &animation_duration, "value")
         .build();
+    let row_anim_dur =
+        button_regulator_row("Тривалість анімацій (мс)", &animation_duration, 10.0, 0);
     settings
         .inner()
         .bind("smooth-zoom-enabled", &row_anim_dur, "sensitive")
@@ -281,7 +279,7 @@ fn transition_animation_from_index(i: u32) -> TransitionAnimation {
     }
 }
 
-fn zoom_scale_row(settings: &Settings, title: &str, key: &'static str) -> adw::SpinRow {
+fn zoom_scale_row(settings: &Settings, title: &str, key: &'static str) -> adw::ActionRow {
     let initial_value = match key {
         "zoom-fade-in-scale" => settings.zoom_fade_in_scale(),
         "zoom-fade-out-scale" => settings.zoom_fade_out_scale(),
@@ -293,8 +291,7 @@ fn zoom_scale_row(settings: &Settings, title: &str, key: &'static str) -> adw::S
     let min = 0.0;
     let step = 5.0;
     let adjustment = gtk4::Adjustment::new(initial_value * 100.0, min, 100.0, step, 5.0, 0.0);
-    let spin_row = adw::SpinRow::new(Some(&adjustment), step, 0);
-    spin_row.set_title(title);
+    let row = button_regulator_row(title, &adjustment, step, 0);
 
     {
         let settings = settings.clone();
@@ -314,7 +311,7 @@ fn zoom_scale_row(settings: &Settings, title: &str, key: &'static str) -> adw::S
         });
     }
 
-    spin_row
+    row
 }
 
 fn easing_row(settings: &Settings, title: &str, key: &'static str) -> adw::ActionRow {
@@ -359,7 +356,7 @@ fn easing_row(settings: &Settings, title: &str, key: &'static str) -> adw::Actio
     row
 }
 
-fn transition_duration_row(settings: &Settings, title: &str) -> adw::SpinRow {
+fn transition_duration_row(settings: &Settings, title: &str) -> adw::ActionRow {
     let adjustment = gtk4::Adjustment::new(
         settings.crossfade_duration_ms() as f64,
         0.0,
@@ -368,8 +365,7 @@ fn transition_duration_row(settings: &Settings, title: &str) -> adw::SpinRow {
         100.0,
         0.0,
     );
-    let row = adw::SpinRow::new(Some(&adjustment), 50.0, 0);
-    row.set_title(title);
+    let row = button_regulator_row(title, &adjustment, 50.0, 0);
     {
         let settings = settings.clone();
         adjustment.connect_value_changed(move |adjustment| {
@@ -384,7 +380,7 @@ fn slide_duration_row(
     settings: &Settings,
     title: &str,
     animation: TransitionAnimation,
-) -> adw::SpinRow {
+) -> adw::ActionRow {
     let initial_value = match animation {
         TransitionAnimation::HorizontalSlide => settings.horizontal_slide_duration_ms(),
         TransitionAnimation::VerticalSlide => settings.vertical_slide_duration_ms(),
@@ -395,19 +391,30 @@ fn slide_duration_row(
         _ => 500,
     };
     let adjustment = gtk4::Adjustment::new(initial_value as f64, 0.0, 1000.0, 50.0, 100.0, 0.0);
-    let row = adw::SpinRow::new(Some(&adjustment), 50.0, 0);
-    row.set_title(title);
+    let row = button_regulator_row(title, &adjustment, 50.0, 0);
     {
         let settings = settings.clone();
         adjustment.connect_value_changed(move |adjustment| {
             let value = adjustment.value().round() as u32;
             match animation {
-                TransitionAnimation::HorizontalSlide => settings.set_horizontal_slide_duration_ms(value),
-                TransitionAnimation::VerticalSlide => settings.set_vertical_slide_duration_ms(value),
-                TransitionAnimation::HorizontalFadeSlide => settings.set_horizontal_fade_slide_duration_ms(value),
-                TransitionAnimation::VerticalFadeSlide => settings.set_vertical_fade_slide_duration_ms(value),
-                TransitionAnimation::HorizontalScaleSlide => settings.set_horizontal_scale_slide_duration_ms(value),
-                TransitionAnimation::VerticalScaleSlide => settings.set_vertical_scale_slide_duration_ms(value),
+                TransitionAnimation::HorizontalSlide => {
+                    settings.set_horizontal_slide_duration_ms(value)
+                }
+                TransitionAnimation::VerticalSlide => {
+                    settings.set_vertical_slide_duration_ms(value)
+                }
+                TransitionAnimation::HorizontalFadeSlide => {
+                    settings.set_horizontal_fade_slide_duration_ms(value)
+                }
+                TransitionAnimation::VerticalFadeSlide => {
+                    settings.set_vertical_fade_slide_duration_ms(value)
+                }
+                TransitionAnimation::HorizontalScaleSlide => {
+                    settings.set_horizontal_scale_slide_duration_ms(value)
+                }
+                TransitionAnimation::VerticalScaleSlide => {
+                    settings.set_vertical_scale_slide_duration_ms(value)
+                }
                 _ => {}
             }
         });
@@ -417,15 +424,15 @@ fn slide_duration_row(
 
 fn set_slide_duration_visibility(
     animation: TransitionAnimation,
-    horizontal: &adw::SpinRow,
-    vertical: &adw::SpinRow,
-    horizontal_fade: &adw::SpinRow,
-    vertical_fade: &adw::SpinRow,
-    horizontal_scale: &adw::SpinRow,
-    horizontal_scale_start: &adw::SpinRow,
+    horizontal: &adw::ActionRow,
+    vertical: &adw::ActionRow,
+    horizontal_fade: &adw::ActionRow,
+    vertical_fade: &adw::ActionRow,
+    horizontal_scale: &adw::ActionRow,
+    horizontal_scale_start: &adw::ActionRow,
     horizontal_scale_easing: &adw::ActionRow,
-    vertical_scale: &adw::SpinRow,
-    vertical_scale_start: &adw::SpinRow,
+    vertical_scale: &adw::ActionRow,
+    vertical_scale_start: &adw::ActionRow,
     vertical_scale_easing: &adw::ActionRow,
 ) {
     horizontal.set_visible(matches!(animation, TransitionAnimation::HorizontalSlide));
@@ -442,15 +449,14 @@ fn set_slide_duration_visibility(
     vertical_scale_easing.set_visible(is_vertical_scale);
 }
 
-fn zoom_duration_row(settings: &Settings, title: &str, key: &'static str) -> adw::SpinRow {
+fn zoom_duration_row(settings: &Settings, title: &str, key: &'static str) -> adw::ActionRow {
     let initial_value = match key {
         "zoom-fade-in-duration-ms" => settings.zoom_fade_in_duration_ms(),
         "zoom-fade-out-duration-ms" => settings.zoom_fade_out_duration_ms(),
         _ => 500,
     };
     let adjustment = gtk4::Adjustment::new(initial_value as f64, 0.0, 1000.0, 50.0, 100.0, 0.0);
-    let row = adw::SpinRow::new(Some(&adjustment), 50.0, 0);
-    row.set_title(title);
+    let row = button_regulator_row(title, &adjustment, 50.0, 0);
     {
         let settings = settings.clone();
         adjustment.connect_value_changed(move |adjustment| {

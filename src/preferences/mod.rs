@@ -9,6 +9,7 @@ pub mod auto_hide;
 mod dialog;
 mod general;
 mod navigation;
+pub(crate) mod regulator;
 pub mod settings;
 mod view;
 

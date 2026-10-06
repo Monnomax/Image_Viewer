@@ -62,16 +62,20 @@ where
         "20 зображень",
     ];
     let preload_model = gtk4::StringList::new(&preload_options);
-    let row_preload = adw::ComboRow::builder()
+    let row_preload = adw::ActionRow::builder()
         .title("Попереднє завантаження зображень")
+        .build();
+    let preload_dropdown = gtk4::DropDown::builder()
         .model(&preload_model)
         .selected(preload_mode_index(settings.preload_mode()))
+        .valign(gtk4::Align::Center)
         .build();
+    row_preload.add_suffix(&preload_dropdown);
 
     {
         let settings = settings.clone();
-        row_preload.connect_selected_notify(move |c| {
-            settings.set_preload_mode(preload_mode_from_index(c.selected()));
+        preload_dropdown.connect_selected_notify(move |dropdown| {
+            settings.set_preload_mode(preload_mode_from_index(dropdown.selected()));
         });
     }
     group_performance.add(&row_preload);
@@ -91,15 +95,19 @@ where
     let group_deletion = adw::PreferencesGroup::builder().title("Видалення").build();
 
     let delete_action_model = gtk4::StringList::new(&["Переміщувати в кошик", "Видаляти назавжди"]);
-    let row_delete_action = adw::ComboRow::builder()
+    let row_delete_action = adw::ActionRow::builder()
         .title("Дія під час видалення")
+        .build();
+    let delete_action_dropdown = gtk4::DropDown::builder()
         .model(&delete_action_model)
         .selected(delete_action_index(settings.delete_action()))
+        .valign(gtk4::Align::Center)
         .build();
+    row_delete_action.add_suffix(&delete_action_dropdown);
     {
         let settings = settings.clone();
-        row_delete_action.connect_selected_notify(move |row| {
-            settings.set_delete_action(delete_action_from_index(row.selected()));
+        delete_action_dropdown.connect_selected_notify(move |dropdown| {
+            settings.set_delete_action(delete_action_from_index(dropdown.selected()));
         });
     }
     group_deletion.add(&row_delete_action);

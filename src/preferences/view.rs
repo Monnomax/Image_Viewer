@@ -3,6 +3,7 @@
 use crate::preferences::settings::{
     parse_hex_color, rgba_to_hex, rgba_to_hex_alpha, BackgroundType, Settings,
 };
+use crate::preferences::regulator::button_regulator_row as make_button_regulator_row;
 use adw::prelude::*;
 use gtk4::gdk;
 use gtk4::glib;
@@ -176,22 +177,20 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
     // ---- Група: масштаб ----
     let group_zoom = adw::PreferencesGroup::builder().title("Масштаб").build();
 
-    let row_min = adw::SpinRow::new(
-        Some(&gtk4::Adjustment::new(0.02, 0.01, 1.0, 0.01, 0.05, 0.0)),
-        0.01,
-        2,
-    );
-    row_min.set_title("Мінімальний масштаб");
-    settings.inner().bind("min-zoom", &row_min, "value").build();
+    let min_zoom = gtk4::Adjustment::new(0.02, 0.01, 1.0, 0.01, 0.05, 0.0);
+    settings
+        .inner()
+        .bind("min-zoom", &min_zoom, "value")
+        .build();
+    let row_min = make_button_regulator_row("Мінімальний масштаб", &min_zoom, 0.01, 2);
     group_zoom.add(&row_min);
 
-    let row_max = adw::SpinRow::new(
-        Some(&gtk4::Adjustment::new(40.0, 1.0, 100.0, 1.0, 5.0, 0.0)),
-        1.0,
-        1,
-    );
-    row_max.set_title("Максимальний масштаб");
-    settings.inner().bind("max-zoom", &row_max, "value").build();
+    let max_zoom = gtk4::Adjustment::new(40.0, 1.0, 100.0, 1.0, 5.0, 0.0);
+    settings
+        .inner()
+        .bind("max-zoom", &max_zoom, "value")
+        .build();
+    let row_max = make_button_regulator_row("Максимальний масштаб", &max_zoom, 1.0, 1);
     group_zoom.add(&row_max);
 
     page.add(&group_zoom);
@@ -597,104 +596,56 @@ fn wallpaper_row(settings: &Settings) -> adw::ExpanderRow {
     expander
 }
 
-/// ActionRow з повзунком "Корекція яскравості": -100% (темніше) ..
+/// ActionRow з кнопкою-регулятором "Корекція яскравості": -100% (темніше) ..
 /// 0 (без змін) .. +100% (світліше). Насправді це не гамма-корекція, а
 /// дешевий напівпрозорий чорний/білий шар поверх шпалери в renderer.rs —
-/// самого повзунка це не стосується, лише зберігає значення в GSettings.
+/// кнопка зберігає значення в GSettings і змінюється прокручуванням.
 fn brightness_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder()
-        .title("Корекція яскравості")
-        .build();
-
-    let adjustment = gtk4::Adjustment::new(0.0, -100.0, 100.0, 1.0, 5.0, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(0);
-    scale.set_value_pos(gtk4::PositionType::Right);
-    scale.add_mark(0.0, gtk4::PositionType::Bottom, None);
-
-    settings
-        .inner()
-        .bind("wallpaper-brightness", &adjustment, "value")
-        .build();
-
-    row.add_suffix(&scale);
-    row
+    button_regulator_row(
+        settings,
+        "Корекція яскравості",
+        "wallpaper-brightness",
+        -100.0,
+        100.0,
+        1.0,
+        0,
+    )
 }
 
-/// ActionRow з повзунком "Розмиття": 0 (без розмиття) .. 100 (максимум).
+/// ActionRow з кнопкою-регулятором "Розмиття": 0 (без розмиття) .. 100 (максимум).
 fn blur_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("Розмиття").build();
-
-    let adjustment = gtk4::Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(0);
-    scale.set_value_pos(gtk4::PositionType::Right);
-
-    settings
-        .inner()
-        .bind("wallpaper-blur", &adjustment, "value")
-        .build();
-
-    row.add_suffix(&scale);
-    row
+    button_regulator_row(settings, "Розмиття", "wallpaper-blur", 0.0, 100.0, 1.0, 0)
 }
 
-/// ActionRow з повзунком "Насиченість": 0.0 (чорно-біла шпалера) ..
+/// ActionRow з кнопкою-регулятором "Насиченість": 0.0 (чорно-біла шпалера) ..
 /// 1.0 (без змін, типово) .. 2.0 (подвоєна насиченість кольору).
 fn saturation_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("Насиченість").build();
-
-    let adjustment = gtk4::Adjustment::new(1.0, 0.0, 2.0, 0.1, 0.1, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(1);
-    scale.set_value_pos(gtk4::PositionType::Right);
-    scale.add_mark(1.0, gtk4::PositionType::Bottom, None);
-
-    settings
-        .inner()
-        .bind("wallpaper-saturation", &adjustment, "value")
-        .build();
-
-    row.add_suffix(&scale);
-    row
+    button_regulator_row(
+        settings,
+        "Насиченість",
+        "wallpaper-saturation",
+        0.0,
+        2.0,
+        0.1,
+        1,
+    )
 }
 
-/// ActionRow з повзунком "Зернистість": 0 (без зерна) .. 100 (максимум).
+/// ActionRow з кнопкою-регулятором "Зернистість": 0 (без зерна) .. 100 (максимум).
 fn grain_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("Зернистість").build();
-
-    let adjustment = gtk4::Adjustment::new(0.0, 0.0, 100.0, 5.0, 5.0, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(0);
-    scale.set_value_pos(gtk4::PositionType::Right);
-
-    // bind на adjustment, а не на scale: "value" — властивість
-    // GtkAdjustment; ключ схеми "u" (uint), а adjustment.value — double,
-    // GSettings::bind() коректно конвертує між ними (той самий прийом,
-    // що й для "image-corner-radius" у corner_radius_row() вище).
-    settings
-        .inner()
-        .bind("wallpaper-grain", &adjustment, "value")
-        .build();
-
-    row.add_suffix(&scale);
-    row
+    button_regulator_row(
+        settings,
+        "Зернистість",
+        "wallpaper-grain",
+        0.0,
+        100.0,
+        5.0,
+        0,
+    )
 }
 
 /// ExpanderRow "Показувати тінь": перемикач у кінці головного рядка,
-/// п'ять вкладених рядків — чотири однакові за формою повзунки (0..100px,
+/// п'ять вкладених рядків — чотири однакові за формою кнопки-регулятори (0..100px,
 /// крок 1px) і рядок з colorpicker'ом кольору тіні (з альфа-каналом).
 /// Саме малювання тіні під зображенням — у renderer.rs; тут лише
 /// зберігаються значення в GSettings.
@@ -709,126 +660,94 @@ fn shadow_row(settings: &Settings) -> adw::ExpanderRow {
         .build();
     row.add_suffix(&switch);
 
-    row.add_row(&slider_row(
+    row.add_row(&button_regulator_row(
         settings,
         "Зміщення по горизонталі",
         "shadow-offset-x",
         -100.0,
         100.0,
+        1.0,
+        0,
     ));
-    row.add_row(&slider_row(
+    row.add_row(&button_regulator_row(
         settings,
         "Зміщення по вертикалі",
         "shadow-offset-y",
         -100.0,
         100.0,
+        1.0,
+        0,
     ));
-    row.add_row(&slider_row(
+    row.add_row(&button_regulator_row(
         settings,
         "Радіус розмиття",
         "shadow-blur-radius",
         0.0,
         100.0,
+        1.0,
+        0,
     ));
-    row.add_row(&slider_row(
+    row.add_row(&button_regulator_row(
         settings,
         "Радіус розтягування",
         "shadow-spread-radius",
         0.0,
         100.0,
+        1.0,
+        0,
     ));
 
     let row_color = adw::ActionRow::builder().title("Колір").build();
     row_color.add_suffix(&color_button(settings, "shadow-color", true));
     row.add_row(&row_color);
 
-    row.add_row(&slider_row(
+    row.add_row(&button_regulator_row(
         settings,
         "Прозорість",
         "shadow-opacity",
         0.0,
         100.0,
+        1.0,
+        0,
     ));
 
     row
 }
 
-/// ActionRow з повзунком (крок 1px), прив'язаним до ключа `key`, у межах
+/// ActionRow з кнопкою-регулятором, прив'язаною до ключа `key`, у межах
 /// `min..max`. Спільна форма для рядків тіні (зміщення X/Y, розмиття,
-/// розтягування, прозорість) — самі лише назва/ключ/діапазон різняться,
-/// початкове значення повзунка (перш ніж bind() перепише його реальним з
-/// GSettings) тут не важливе.
-fn slider_row(
+/// розтягування, прозорість) — змінюється прокручуванням кнопки, значення
+/// синхронізується з GSettings через GtkAdjustment.
+fn button_regulator_row(
     settings: &Settings,
     title: &str,
     key: &'static str,
     min: f64,
     max: f64,
+    step: f64,
+    digits: u32,
 ) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title(title).build();
-
-    let adjustment = gtk4::Adjustment::new(min, min, max, 1.0, 5.0, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(0);
-    scale.set_value_pos(gtk4::PositionType::Right);
-    if min < 0.0 && max > 0.0 {
-        scale.add_mark(0.0, gtk4::PositionType::Bottom, None);
-    }
-
+    let adjustment = gtk4::Adjustment::new(min, min, max, step, step, 0.0);
     settings.inner().bind(key, &adjustment, "value").build();
-
-    row.add_suffix(&scale);
-    row
+    make_button_regulator_row(title, &adjustment, step, digits)
 }
 
-/// ActionRow з повзунком (GtkScale), прив'язаним до ключа "image-padding" —
+/// ActionRow з кнопкою-регулятором, прив'язаною до ключа "image-padding" —
 /// відступ зображення від країв вікна при вписуванні в екран.
 fn padding_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder().title("Відступ").build();
-
-    let adjustment = gtk4::Adjustment::new(50.0, 0.0, 100.0, 5.0, 5.0, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(0);
-    scale.set_value_pos(gtk4::PositionType::Right);
-
-    settings
-        .inner()
-        .bind("image-padding", &adjustment, "value") // ← адресат: adjustment, не scale
-        .build();
-
-    row.add_suffix(&scale);
-    row
+    button_regulator_row(settings, "Відступ", "image-padding", 0.0, 100.0, 5.0, 0)
 }
 
-/// ActionRow з повзунком, прив'язаним до ключа "image-corner-radius" —
+/// ActionRow з кнопкою-регулятором, прив'язаною до ключа "image-corner-radius" —
 /// радіус заокруглення кутів зображення при відображенні.
 fn corner_radius_row(settings: &Settings) -> adw::ActionRow {
-    let row = adw::ActionRow::builder()
-        .title("Заокруглення кутів")
-        .build();
-
-    let adjustment = gtk4::Adjustment::new(0.0, 0.0, 20.0, 1.0, 1.0, 0.0);
-    let scale = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&adjustment));
-    scale.set_valign(gtk4::Align::Center);
-    scale.set_size_request(160, -1);
-    scale.set_draw_value(true);
-    scale.set_digits(0);
-    scale.set_value_pos(gtk4::PositionType::Right);
-
-    // bind на adjustment, а не на scale: у GtkScale/GtkRange властивості
-    // "value" немає — вона живе на GtkAdjustment (див. попередній баг
-    // з "Відступом").
-    settings
-        .inner()
-        .bind("image-corner-radius", &adjustment, "value")
-        .build();
-
-    row.add_suffix(&scale);
-    row
+    button_regulator_row(
+        settings,
+        "Заокруглення кутів",
+        "image-corner-radius",
+        0.0,
+        20.0,
+        1.0,
+        0,
+    )
 }
