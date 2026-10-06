@@ -624,7 +624,7 @@ fn wallpaper_row(settings: &Settings) -> adw::ExpanderRow {
 fn brightness_row(settings: &Settings) -> adw::ActionRow {
     button_regulator_row(
         settings,
-        "Корекція яскравості",
+        "Яскравість",
         "wallpaper-brightness",
         -100.0,
         100.0,
