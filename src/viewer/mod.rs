@@ -21,6 +21,7 @@ mod metadata;
 mod properties;
 mod rename;
 mod renderer;
+mod share;
 mod rotate;
 mod transition;
 mod view_state;

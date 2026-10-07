@@ -60,6 +60,7 @@ fn build_popover(
     add_set_wallpaper_action(&actions, window, viewer);
     add_rename_action(&actions, window, area, viewer);
     add_copy_action(&actions, area, viewer);
+    add_share_action(&actions, window, viewer);
     add_delete_action(&actions, window, area, viewer, settings);
     add_properties_action(&actions, viewer);
     add_preferences_action(&actions, area, viewer, settings);
@@ -90,6 +91,7 @@ fn build_popover(
     section_actions.append(Some("Встановити як тло"), Some("ctxmenu.set-wallpaper"));
     section_actions.append(Some("Перейменувати"), Some("ctxmenu.rename"));
     section_actions.append(Some("Копіювати"), Some("ctxmenu.copy"));
+    section_actions.append(Some("Поділитися"), Some("ctxmenu.share"));
     section_actions.append(Some("Видалити"), Some("ctxmenu.delete"));
     section_actions.append(Some("Властивості"), Some("ctxmenu.properties"));
     section_actions.append(Some("Налаштувати"), Some("ctxmenu.open-settings"));
@@ -311,6 +313,24 @@ fn add_copy_action(actions: &gio::SimpleActionGroup, area: &Widget, viewer: &Rc<
             eprintln!("Не вдалося скопіювати файл у clipboard {:?}: {}", path, err);
         }
     });
+    actions.add_action(&action);
+}
+
+fn add_share_action(
+    actions: &gio::SimpleActionGroup,
+    window: &ApplicationWindow,
+    viewer: &Rc<RefCell<Viewer>>,
+) {
+    let action = gio::SimpleAction::new("share", None);
+    action.set_enabled(true);
+
+    let window = window.clone();
+    let viewer = viewer.clone();
+
+    action.connect_activate(move |_, _| {
+        crate::viewer::share::show(&window, &viewer);
+    });
+
     actions.add_action(&action);
 }
 
