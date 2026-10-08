@@ -433,6 +433,7 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         move |hidden: bool| {
             if hidden {
                 overlays.hide_all();
+                overlays.header.set_visible(!window.is_fullscreen());
             } else {
                 overlays.restore(&settings, &window);
             }

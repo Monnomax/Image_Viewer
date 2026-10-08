@@ -185,7 +185,7 @@ fn apply_rounded_corners(picture: &gtk4::Picture) {
     const CSS_CLASS: &str = "imgviewer-properties-thumbnail";
 
     let provider = gtk4::CssProvider::new();
-    provider.load_from_data(&format!(
+    provider.load_from_string(&format!(
         ".{class} {{ border-radius: 10px; }}",
         class = CSS_CLASS
     ));

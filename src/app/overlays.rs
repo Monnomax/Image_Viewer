@@ -54,7 +54,7 @@ window.light .overlay-file-label {
 
 pub(super) fn install_css() {
     let provider = gtk4::CssProvider::new();
-    provider.load_from_data(CSS);
+    provider.load_from_string(CSS);
 
     if let Some(display) = gdk::Display::default() {
         gtk4::style_context_add_provider_for_display(

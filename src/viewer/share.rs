@@ -1,20 +1,20 @@
 // viewer/share.rs — діалог "Поділитися" для поточного зображення.
 //
-// Реальне передавання файлу делегується системним утилітам:
-//   - blueman-sendto / bluetooth-sendto — Bluetooth
-//   - nautilus-sendto — електронна пошта
+// Доступні способи:
+//   - Bluetooth — blueman-sendto / bluetooth-sendto
+//   - Електронна пошта — nautilus-sendto
+//   - Інша програма… — системний GTK app chooser через FileLauncher
 //
-// Застосунок не має власної реалізації Bluetooth або поштового клієнта.
-// Це навмисно: ImgViewer лише передає поточний файл відповідному
-// системному інструменту.
+// ImgViewer не реалізує сам протоколи передачі. Він лише передає поточний
+// файл відповідному системному механізму.
 
 use crate::viewer::Viewer;
 use adw::prelude::*;
-use gtk4::gio;
 use adw::ApplicationWindow;
+use gtk4::gio;
 use std::cell::RefCell;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 
@@ -22,11 +22,10 @@ use std::rc::Rc;
 enum ShareMethod {
     Bluetooth(&'static str),
     Email(&'static str),
+    OtherProgram,
 }
 
 /// Показує діалог вибору способу передачі поточного зображення.
-///
-/// Якщо поточного зображення немає — нічого не робить.
 pub fn show(window: &ApplicationWindow, viewer: &Rc<RefCell<Viewer>>) {
     let Some(path) = viewer.borrow().model.current_path() else {
         return;
@@ -37,7 +36,6 @@ pub fn show(window: &ApplicationWindow, viewer: &Rc<RefCell<Viewer>>) {
     let dialog = adw::Dialog::builder()
         .title("Поділитися")
         .content_width(400)
-        .content_height(0)
         .build();
 
     let toolbar_view = adw::ToolbarView::new();
@@ -69,43 +67,41 @@ pub fn show(window: &ApplicationWindow, viewer: &Rc<RefCell<Viewer>>) {
 
     content.append(&heading);
 
-    if methods.is_empty() {
-        let group = adw::PreferencesGroup::new();
+    let group = adw::PreferencesGroup::new();
 
-        let row = adw::ActionRow::builder()
-            .title("Немає доступних способів")
-            .subtitle("Не знайдено системних засобів передачі файлів.")
-            .build();
+    for method in methods {
+        let row = build_method_row(method);
 
-        row.set_sensitive(false);
+        let dialog_for_row = dialog.clone();
+        let path_for_row = path.clone();
+        let window_for_row = window.clone();
+
+        row.connect_activated(move |_| {
+            match method {
+                ShareMethod::OtherProgram => {
+                    // Спочатку закриваємо наше діалогове вікно, після чого
+                    // GTK показує системний вибір застосунку.
+                    dialog_for_row.close();
+
+                    launch_with_app_chooser(&window_for_row, &path_for_row);
+                }
+
+                ShareMethod::Bluetooth(_) | ShareMethod::Email(_) => {
+                    let result = launch_method(method, &path_for_row);
+
+                    dialog_for_row.close();
+
+                    if let Err(error) = result {
+                        show_error(&window_for_row, error);
+                    }
+                }
+            }
+        });
+
         group.add(&row);
-
-        content.append(&group);
-    } else {
-        let group = adw::PreferencesGroup::new();
-
-        for method in methods {
-    let row = build_method_row(method);
-
-    let dialog_for_row = dialog.clone();
-    let path_for_row = path.clone();
-    let window_for_row = window.clone();
-
-    row.connect_activated(move |_| {
-        let result = launch_method(method, &path_for_row);
-
-        dialog_for_row.close();
-
-        if let Err(error) = result {
-            show_error(&window_for_row, error);
-        }
-    });
-
-    group.add(&row);
-}
-
-        content.append(&group);
     }
+
+    content.append(&group);
 
     toolbar_view.set_content(Some(&content));
     dialog.set_child(Some(&toolbar_view));
@@ -115,11 +111,7 @@ pub fn show(window: &ApplicationWindow, viewer: &Rc<RefCell<Viewer>>) {
 
 /// Визначає доступні системні засоби передачі.
 ///
-/// Bluetooth підтримує два можливих інструменти:
-///   1. blueman-sendto
-///   2. bluetooth-sendto
-///
-/// Якщо встановлено обидва, використовується blueman-sendto.
+/// "Інша програма…" доступна завжди, оскільки її обробляє GTK.
 fn available_methods() -> Vec<ShareMethod> {
     let mut methods = Vec::new();
 
@@ -133,10 +125,12 @@ fn available_methods() -> Vec<ShareMethod> {
         methods.push(ShareMethod::Email("nautilus-sendto"));
     }
 
+    methods.push(ShareMethod::OtherProgram);
+
     methods
 }
 
-/// Створює один рядок способу передачі.
+/// Створює рядок одного способу передачі.
 fn build_method_row(method: ShareMethod) -> adw::ActionRow {
     match method {
         ShareMethod::Bluetooth(command) => {
@@ -148,7 +142,6 @@ fn build_method_row(method: ShareMethod) -> adw::ActionRow {
 
             row.add_prefix(&gtk4::Image::from_icon_name("bluetooth-symbolic"));
             row.add_suffix(&gtk4::Image::from_icon_name("go-next-symbolic"));
-
             row.set_tooltip_text(Some(command));
 
             row
@@ -163,19 +156,36 @@ fn build_method_row(method: ShareMethod) -> adw::ActionRow {
 
             row.add_prefix(&gtk4::Image::from_icon_name("mail-send-symbolic"));
             row.add_suffix(&gtk4::Image::from_icon_name("go-next-symbolic"));
-
             row.set_tooltip_text(Some(command));
+
+            row
+        }
+
+        ShareMethod::OtherProgram => {
+            let row = adw::ActionRow::builder()
+                .title("Інша програма…")
+                .subtitle("Вибрати програму для відкриття зображення")
+                .activatable(true)
+                .build();
+
+            row.add_prefix(&gtk4::Image::from_icon_name(
+                "application-x-executable-symbolic",
+            ));
+            row.add_suffix(&gtk4::Image::from_icon_name("go-next-symbolic"));
 
             row
         }
     }
 }
 
-/// Запускає вибраний спосіб передачі.
+/// Запускає Bluetooth або email helper.
 fn launch_method(method: ShareMethod, path: &PathBuf) -> Result<(), String> {
     let command = match method {
         ShareMethod::Bluetooth(command) => command,
         ShareMethod::Email(command) => command,
+        ShareMethod::OtherProgram => {
+            return Err("Внутрішня помилка: для цього способу потрібен GTK FileLauncher".to_string());
+        }
     };
 
     Command::new(command)
@@ -192,23 +202,45 @@ fn launch_method(method: ShareMethod, path: &PathBuf) -> Result<(), String> {
         })
 }
 
-/// Перевіряє, чи існує виконуваний файл у PATH.
+/// Відкриває системний chooser програм.
 ///
-/// Тут ми навмисно не викликаємо зовнішню команду для самої перевірки:
-/// достатньо знайти її в одному з каталогів PATH.
+/// always_ask=true змушує GTK запитати, якою програмою відкрити файл,
+/// замість автоматичного використання типової програми.
+fn launch_with_app_chooser(window: &ApplicationWindow, path: &Path) {
+    let file = gio::File::for_path(path);
+
+    let launcher = gtk4::FileLauncher::new(Some(&file));
+    launcher.set_always_ask(true);
+
+    let window_for_callback = window.clone();
+
+    launcher.launch(
+        Some(window),
+        None::<&gio::Cancellable>,
+        move |result| {
+            if let Err(error) = result {
+                show_error(
+                    &window_for_callback,
+                    format!(
+                        "Не вдалося відкрити вибрану програму для цього файлу: {}",
+                        error
+                    ),
+                );
+            }
+        },
+    );
+}
+
+/// Перевіряє, чи існує виконуваний файл у PATH.
 fn command_exists(command: &str) -> bool {
     let Some(path_var) = env::var_os("PATH") else {
         return false;
     };
 
-    env::split_paths(&path_var).any(|directory| {
-        let candidate = directory.join(command);
-
-        candidate.is_file()
-    })
+    env::split_paths(&path_var).any(|directory| directory.join(command).is_file())
 }
 
-/// Показує помилку запуску вже поверх головного вікна.
+/// Показує помилку запуску.
 fn show_error(window: &ApplicationWindow, message: String) {
     let dialog = adw::AlertDialog::builder()
         .heading("Не вдалося поділитися")

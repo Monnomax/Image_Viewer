@@ -102,7 +102,7 @@ pub struct ThumbnailStrip {
 impl ThumbnailStrip {
     pub fn install_css() {
         let provider = gtk4::CssProvider::new();
-        provider.load_from_data(THUMB_CSS);
+        provider.load_from_string(THUMB_CSS);
         if let Some(display) = gtk4::gdk::Display::default() {
             gtk4::style_context_add_provider_for_display(
                 &display,
@@ -281,21 +281,23 @@ impl ThumbnailStrip {
     /// Планує прокрутку після завершення поточного кола GTK (розкладка має встигнути).
     fn schedule_scroll_to(&self, index: usize) {
         let scroll = self.scroll.clone();
+        let items_box = self.items_box.clone();
         let thumb_size = self.thumb_size;
         let spacing = self.spacing;
         let item = self.items.get(index).map(|item| item.button.clone());
         let scroll_animator = self.scroll_animator.clone();
         glib::idle_add_local_once(move || {
             if let Some(item) = item {
-                let allocation = item.allocation();
-                if allocation.width() > 0 {
-                    scroll_to_bounds(
-                        &scroll,
-                        allocation.x() as f64,
-                        allocation.width() as f64,
-                        &scroll_animator,
-                    );
-                    return;
+                if let Some(bounds) = item.compute_bounds(&items_box) {
+                    if bounds.width() > 0.0 {
+                        scroll_to_bounds(
+                            &scroll,
+                            bounds.x() as f64,
+                            bounds.width() as f64,
+                            &scroll_animator,
+                        );
+                        return;
+                    }
                 }
             }
 
@@ -315,11 +317,7 @@ impl ThumbnailStrip {
             return 16;
         }
 
-        let view_w = self
-            .scroll
-            .width()
-            .max(self.scroll.allocated_width())
-            .max(1) as f64;
+        let view_w = self.scroll.width().max(1) as f64;
         if view_w <= 1.0 {
             return self.images.len().min(40).max(12).saturating_add(8);
         }
@@ -330,7 +328,7 @@ impl ThumbnailStrip {
 
     fn request_visible_range(&mut self) {
         let adj = self.scroll.hadjustment();
-        let mut view_w = self.scroll.width().max(self.scroll.allocated_width()) as f64;
+        let mut view_w = self.scroll.width() as f64;
         let item_w = (self.thumb_size as i32 + self.spacing) as f64;
         if item_w <= 0.0 || self.images.is_empty() {
             return;
@@ -391,7 +389,8 @@ impl ThumbnailStrip {
         let thumb_h = pixbuf.height();
         self.items[index].picture.set_size_request(thumb_w, thumb_h);
         self.items[index].button.set_size_request(thumb_w, thumb_h);
-        self.items[index].picture.set_pixbuf(Some(&pixbuf));
+        let texture = gtk4::gdk::Texture::for_pixbuf(&pixbuf);
+        self.items[index].picture.set_paintable(Some(&texture));
         self.items[index].loaded = true;
         self.items[index].pending = false;
     }
@@ -441,7 +440,7 @@ impl ThumbnailStrip {
         for item in &mut self.items {
             item.loaded = false;
             item.pending = false;
-            item.picture.set_pixbuf(None);
+            item.picture.set_paintable(None::<&gtk4::gdk::Texture>);
             item.picture.set_size_request(size, size);
             item.button.set_size_request(size, size);
         }

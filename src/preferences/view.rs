@@ -598,7 +598,7 @@ fn add_background_preview_styles() {
         return;
     };
     let provider = gtk4::CssProvider::new();
-    provider.load_from_data(
+    provider.load_from_string(
         "button.background-preview { padding: 0; border: none; outline: none; box-shadow: none; border-radius: 12px; }",
     );
     gtk4::style_context_add_provider_for_display(
