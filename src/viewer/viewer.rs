@@ -305,6 +305,10 @@ impl Viewer {
         );
     }
 
+    pub fn is_current_path(&self, path: &PathBuf) -> bool {
+    self.model.current_path().as_ref() == Some(path)
+}
+
     pub fn ensure_loaded(&mut self, path: &PathBuf) {
         if self.model.current_path().as_ref() == Some(path) {
             self.animated_gif_player.clear_active();

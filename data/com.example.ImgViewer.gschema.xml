@@ -22,6 +22,14 @@
       <description>Зберігати останній використаний масштаб перегляду між зображеннями/сеансами.</description>
     </key>
 
+    <key name="boost-screen-brightness" type="b">
+      <default>false</default>
+      <summary>Підвищувати яскравість до 100%</summary>
+      <description>
+        Плавно підвищувати яскравість екрана до 100% під час перегляду зображень.
+      </description>
+    </key>
+
     <key name="remember-position" type="b">
       <default>false</default>
       <summary>Запам'ятовувати положення</summary>

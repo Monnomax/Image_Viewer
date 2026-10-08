@@ -3,7 +3,8 @@
 mod app;
 
 mod model;
-mod preferences; // містить власний підмодуль settings — див. preferences/mod.rs
+mod preferences;
+mod screen_brightness;
 mod thumbnail_strip;
 mod utils;
 mod viewer;

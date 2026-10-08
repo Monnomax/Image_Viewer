@@ -176,6 +176,34 @@ pub fn build_page(settings: &Settings) -> adw::PreferencesPage {
     group_shadow.add(&shadow_row(settings));
     page.add(&group_shadow);
 
+    // ---- Група: екран ----
+let group_display = adw::PreferencesGroup::builder()
+    .title("Екран")
+    .build();
+
+let row_brightness = adw::ActionRow::builder()
+    .title("Підвищувати яскравість до 100%")
+    .subtitle("Плавно збільшувати яскравість під час перегляду")
+    .build();
+
+let switch_brightness = gtk4::Switch::new();
+switch_brightness.set_valign(gtk4::Align::Center);
+
+settings
+    .inner()
+    .bind(
+        "boost-screen-brightness",
+        &switch_brightness,
+        "active",
+    )
+    .build();
+
+row_brightness.add_suffix(&switch_brightness);
+row_brightness.set_activatable_widget(Some(&switch_brightness));
+
+group_display.add(&row_brightness);
+page.add(&group_display);
+
     // ---- Група: масштаб ----
     let group_zoom = adw::PreferencesGroup::builder().title("Масштаб").build();
 
