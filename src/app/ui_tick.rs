@@ -1,3 +1,5 @@
+use crate::preferences::Settings;
+use crate::screen_brightness::BrightnessController;
 use crate::thumbnail_strip::{ThumbMsg, ThumbnailStrip};
 use crate::viewer::image_loader::{self, LoaderMsg};
 use crate::viewer::{Canvas, Viewer};
@@ -9,6 +11,8 @@ use std::rc::Rc;
 
 pub(super) struct UiTick {
     pub(super) viewer: Rc<RefCell<Viewer>>,
+    pub(super) settings: Settings,
+    pub(super) brightness: Option<Rc<RefCell<BrightnessController>>>,
     pub(super) canvas: Canvas,
     pub(super) window_title: adw::WindowTitle,
     pub(super) filename_label: gtk4::Label,
@@ -191,11 +195,26 @@ impl UiTick {
         }
     }
 
+    fn sync_brightness(&mut self) {
+        let Some(brightness) = &self.brightness else {
+            return;
+        };
+
+        let should_boost = self.settings.boost_screen_brightness()
+            && self.viewer.borrow().model.current_path().is_some();
+        if should_boost {
+            brightness.borrow_mut().boost();
+        } else {
+            brightness.borrow_mut().restore();
+        }
+    }
+
     pub(super) fn run(&mut self) -> glib::ControlFlow {
         self.handle_image_loader_messages();
         self.handle_thumbnail_messages();
         self.sync_strip_state();
         self.sync_title();
+        self.sync_brightness();
         self.update_animations();
         glib::ControlFlow::Continue
     }

@@ -369,6 +369,10 @@ impl Settings {
         self.0.boolean("remember-zoom")
     }
 
+    pub fn boost_screen_brightness(&self) -> bool {
+        self.0.boolean("boost-screen-brightness")
+    }
+
     pub fn remember_position(&self) -> bool {
         self.0.boolean("remember-position")
     }

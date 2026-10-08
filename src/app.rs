@@ -98,12 +98,15 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
 
     let settings = Settings::new();
     let brightness = match BrightnessController::new() {
-    Ok(controller) => Some(Rc::new(RefCell::new(controller))),
-    Err(err) => {
-        eprintln!("Не вдалося ініціалізувати керування яскравістю екрана: {}", err);
-        None
-    }
-};
+        Ok(controller) => Some(Rc::new(RefCell::new(controller))),
+        Err(err) => {
+            eprintln!(
+                "Не вдалося ініціалізувати керування яскравістю екрана: {}",
+                err
+            );
+            None
+        }
+    };
     let windows_to_close = if replace_existing && settings.single_instance() {
         app.windows()
     } else {
@@ -482,6 +485,8 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
     {
         let mut tick = UiTick {
             viewer: viewer.clone(),
+            settings: settings.clone(),
+            brightness: brightness.clone(),
             canvas: canvas.clone(),
             window_title: window_title.clone(),
             filename_label: filename_label.clone(),
