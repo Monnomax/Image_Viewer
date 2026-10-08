@@ -47,7 +47,14 @@ impl UiTick {
     }
 
     fn handle_thumbnail_messages(&mut self) {
-        while let Ok(message) = self.thumb_receiver.borrow_mut().try_recv() {
+        const MAX_MESSAGES_PER_TICK: usize = 1;
+
+        for _ in 0..MAX_MESSAGES_PER_TICK {
+            let message = match self.thumb_receiver.borrow_mut().try_recv() {
+                Ok(message) => message,
+                Err(_) => break,
+            };
+
             match message {
                 ThumbMsg::Cached { index, bytes } => {
                     if let Ok(pixbuf) = image_loader::decode(&bytes) {
@@ -56,38 +63,44 @@ impl UiTick {
                         self.strip.borrow_mut().handle_failed(index);
                     }
                 }
+
                 ThumbMsg::Original {
                     index,
                     path,
                     bytes,
                     cache_key,
                 } => {
-                    // Спершу GdkPixbuf (швидше, і покриває всі формати, які
-                    // вміє система), а якщо не вдалось — запасний шлях через
-                    // `image` (потрібен переважно для .avif на системах без
-                    // відповідного плагіна gdk-pixbuf — див. коментар біля
-                    // decode_fallback()).
                     let decoded = image_loader::decode(&bytes)
                         .or_else(|_| image_loader::decode_fallback(&bytes));
+
                     match decoded {
                         Ok(full) => {
                             if let Some(scaled) =
                                 crate::thumbnail_strip::scale_to_fit_height(&full, 60)
                             {
                                 let cache_path = crate::thumbnail_strip::cache_path(&cache_key);
+
                                 if crate::thumbnail_strip::ensure_cache_dir().is_ok() {
                                     let _ = scaled.savev(&cache_path, "png", &[]);
                                 }
+
                                 self.strip.borrow_mut().handle_loaded(index, scaled);
                             } else {
                                 self.strip.borrow_mut().handle_failed(index);
                             }
                         }
-                        Err(_) => self.strip.borrow_mut().handle_failed(index),
+
+                        Err(_) => {
+                            self.strip.borrow_mut().handle_failed(index);
+                        }
                     }
+
                     drop(path);
                 }
-                ThumbMsg::Failed { index } => self.strip.borrow_mut().handle_failed(index),
+
+                ThumbMsg::Failed { index } => {
+                    self.strip.borrow_mut().handle_failed(index);
+                }
             }
         }
     }
@@ -151,7 +164,9 @@ impl UiTick {
         if let Some(path) = current_path.as_ref() {
             if !*self.dims_ready.borrow() {
                 if let Some((width, height)) = self.viewer.borrow_mut().current_image_dimensions() {
-                    let size_bytes = std::fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
+                    let size_bytes = std::fs::metadata(path)
+                        .map(|metadata| metadata.len())
+                        .unwrap_or(0);
                     let size_kb = size_bytes as f64 / 1024.0;
                     let size = if size_kb >= 1024.0 {
                         format!("{:.1} Mb", size_kb / 1024.0)
@@ -200,8 +215,11 @@ impl UiTick {
             return;
         };
 
+        brightness.borrow_mut().poll_completions();
+
         let should_boost = self.settings.boost_screen_brightness()
             && self.viewer.borrow().model.current_path().is_some();
+
         if should_boost {
             brightness.borrow_mut().boost();
         } else {
@@ -210,12 +228,48 @@ impl UiTick {
     }
 
     pub(super) fn run(&mut self) -> glib::ControlFlow {
+        let started = std::time::Instant::now();
+
+        self.sync_brightness();
+
         self.handle_image_loader_messages();
         self.handle_thumbnail_messages();
         self.sync_strip_state();
         self.sync_title();
-        self.sync_brightness();
+
         self.update_animations();
+
+        self.handle_image_loader_messages();
+        let after_loader = started.elapsed();
+
+        self.handle_thumbnail_messages();
+        let after_thumbnails = started.elapsed();
+
+        self.sync_strip_state();
+        let after_strip = started.elapsed();
+
+        self.sync_title();
+        let after_title = started.elapsed();
+
+        self.sync_brightness();
+        let after_brightness = started.elapsed();
+
+        self.update_animations();
+        let after_animations = started.elapsed();
+
+        if after_animations > std::time::Duration::from_millis(50) {
+            eprintln!(
+            "ImgViewer: UiTick повільний: loader={:?}, thumbnails={:?}, strip={:?}, title={:?}, brightness={:?}, animations={:?}, total={:?}",
+            after_loader,
+            after_thumbnails.saturating_sub(after_loader),
+            after_strip.saturating_sub(after_thumbnails),
+            after_title.saturating_sub(after_strip),
+            after_brightness.saturating_sub(after_title),
+            after_animations.saturating_sub(after_brightness),
+            after_animations,
+        );
+        }
+
         glib::ControlFlow::Continue
     }
 }

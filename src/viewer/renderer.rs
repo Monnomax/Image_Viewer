@@ -348,7 +348,9 @@ mod imp {
             if self.open_file_button_active.replace(active) == active {
                 return;
             }
-            self.open_file_button.set_visible(active);
+
+            let button = self.open_file_button.clone();
+            glib::idle_add_local_once(move || button.set_visible(active));
         }
 
     }

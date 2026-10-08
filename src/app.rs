@@ -1,5 +1,3 @@
-// app.rs — створює Application/вікно і зв'язує всі модулі докупи.
-
 use adw::prelude::*;
 use adw::ApplicationWindow;
 use gtk4::prelude::FileExt;
@@ -9,9 +7,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::model::Model;
-use crate::screen_brightness::BrightnessController;
 use crate::preferences::auto_hide::VisibilityMode;
 use crate::preferences::Settings;
+use crate::screen_brightness::BrightnessController;
 use crate::thumbnail_strip::{ThumbMsg, ThumbnailStrip};
 use crate::utils;
 use crate::viewer::{input, Canvas, Viewer};
@@ -26,13 +24,6 @@ use overlays::{
 };
 use ui_tick::UiTick;
 
-/// Перетягування фото у вікно: поки триває drag-over — ховає геть усі
-/// елементи інтерфейсу (шапку, кнопки навігації/закриття, підпис файлу,
-/// стрічку мініатюр), щоб нічого не заважало бачити майбутнє зображення.
-/// При виході курсора за межі вікна без скидання чи одразу після drop —
-/// повертає їх до стану, який диктують налаштування. Якщо скинутий файл
-/// вдається розпізнати, одразу відкриває його через той самий
-/// `utils::resolve_path_arg`, що й аргумент командного рядка при старті.
 fn setup_drag_and_drop(
     window: &ApplicationWindow,
     viewer: &Rc<RefCell<Viewer>>,
@@ -66,8 +57,6 @@ fn setup_drag_and_drop(
         let viewer = viewer.clone();
         let canvas = canvas.clone();
         drop_target.connect_drop(move |_, value, _, _| {
-            // Елементи повертаємо одразу, незалежно від того, чи вдасться
-            // розпізнати й відкрити скинутий файл.
             overlays.restore(&settings, &window);
 
             let Ok(file_list) = value.get::<gdk::FileList>() else {
@@ -163,26 +152,29 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
 
             let viewer = viewer.clone();
             let canvas = canvas.clone();
-            dialog.open(Some(&window), None::<&gtk4::gio::Cancellable>, move |result| {
-                let Ok(file) = result else {
-                    return;
-                };
-                let Some(path) = file.path() else {
-                    return;
-                };
-                let (images, index) =
-                    utils::resolve_path_arg(Some(path.to_string_lossy().into_owned()));
-                if images.is_empty() {
-                    return;
-                }
-                viewer.borrow_mut().load_new_source(images, index);
-                canvas.queue_draw();
-                canvas.grab_focus();
-            });
+            dialog.open(
+                Some(&window),
+                None::<&gtk4::gio::Cancellable>,
+                move |result| {
+                    let Ok(file) = result else {
+                        return;
+                    };
+                    let Some(path) = file.path() else {
+                        return;
+                    };
+                    let (images, index) =
+                        utils::resolve_path_arg(Some(path.to_string_lossy().into_owned()));
+                    if images.is_empty() {
+                        return;
+                    }
+                    viewer.borrow_mut().load_new_source(images, index);
+                    canvas.queue_draw();
+                    canvas.grab_focus();
+                },
+            );
         });
     }
 
-    // --- Кнопка "Назад" у Revealer ---
     let prev_button = build_overlay_button("go-previous-symbolic");
     let prev_revealer = gtk4::Revealer::builder()
         .child(&prev_button)
@@ -194,7 +186,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         .reveal_child(should_show_element(&settings, "nav-buttons"))
         .build();
 
-    // --- Кнопка "Вперед" у Revealer ---
     let next_button = build_overlay_button("go-next-symbolic");
     let next_revealer = gtk4::Revealer::builder()
         .child(&next_button)
@@ -206,7 +197,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         .reveal_child(should_show_element(&settings, "nav-buttons"))
         .build();
 
-    // --- Кнопка "Закрити" у Revealer ---
     let close_button = build_overlay_button("window-close-symbolic");
     let close_revealer = gtk4::Revealer::builder()
         .child(&close_button)
@@ -219,7 +209,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         .reveal_child(should_show_close_button(&settings, &window))
         .build();
 
-    // --- Назва відкритого файлу та додаткова інформація у Revealer ---
     let file_info_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     file_info_box.add_css_class("overlay-file-label");
     file_info_box.set_halign(gtk4::Align::Start);
@@ -230,7 +219,7 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
     file_info_box.append(&filename_label);
 
     let extra_info_label = gtk4::Label::new(None);
-    extra_info_label.set_opacity(0.8); // Зробимо додаткову інформацію трохи прозорішою
+    extra_info_label.set_opacity(0.8);
 
     let extra_info_revealer = gtk4::Revealer::builder()
         .child(&extra_info_label)
@@ -240,7 +229,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         .build();
     file_info_box.append(&extra_info_revealer);
 
-    // Обробник наведення курсора для розгортання додаткової інформації
     let extra_rev_clone_enter = extra_info_revealer.clone();
     let extra_rev_clone_leave = extra_info_revealer.clone();
     let motion_extra = gtk4::EventControllerMotion::new();
@@ -252,7 +240,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
     });
     file_info_box.add_controller(motion_extra);
 
-    // Головний Revealer для автоприховування всього блоку
     let filename_revealer = gtk4::Revealer::builder()
         .child(&file_info_box)
         .transition_type(gtk4::RevealerTransitionType::Crossfade)
@@ -276,10 +263,10 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         let viewer = viewer.clone();
         let canvas_clone = canvas.clone();
         next_button.connect_clicked(move |_| {
-    viewer.borrow_mut().navigate(1);
-    canvas_clone.queue_draw();
-    canvas_clone.grab_focus();
-});
+            viewer.borrow_mut().navigate(1);
+            canvas_clone.queue_draw();
+            canvas_clone.grab_focus();
+        });
     }
     {
         let window_for_close = window.clone();
@@ -290,13 +277,11 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
 
     let canvas_overlay = gtk4::Overlay::new();
     canvas_overlay.set_child(Some(&canvas));
-    // Додаємо в оверлей Revealer'и, а не самі кнопки
     canvas_overlay.add_overlay(&prev_revealer);
     canvas_overlay.add_overlay(&next_revealer);
     canvas_overlay.add_overlay(&close_revealer);
     canvas_overlay.add_overlay(&filename_revealer);
 
-    // ---- Стрічка мініатюр ----
     ThumbnailStrip::install_css();
     let strip = Rc::new(RefCell::new(ThumbnailStrip::new(
         settings.clone(),
@@ -304,21 +289,17 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
     )));
     let last_strip_index = Rc::new(RefCell::new(usize::MAX));
     {
-    let viewer_c = viewer.clone();
-    let canvas_c = canvas.clone();
-    let strip_c = strip.clone();
-    let last_strip_index_c = last_strip_index.clone();
-    strip.borrow_mut().set_on_navigate(move |index| {
-        // Оновлюємо мініатюру одразу й без прокрутки — клік уже підтверджує,
-        // що вона видима. `last_strip_index` виставляємо тут-таки, щоб
-        // наступний тік `sync_strip_state` (рядок ~433) не вирішив, що
-        // індекс "змінився ззовні", і не запланував scroll-to-index ще раз.
-        strip_c.borrow_mut().set_current_no_scroll(index);
-        *last_strip_index_c.borrow_mut() = index;
-        viewer_c.borrow_mut().navigate_to(index);
-        canvas_c.queue_draw();
-    });
-}
+        let viewer_c = viewer.clone();
+        let canvas_c = canvas.clone();
+        let strip_c = strip.clone();
+        let last_strip_index_c = last_strip_index.clone();
+        strip.borrow_mut().set_on_navigate(move |index| {
+            strip_c.borrow_mut().set_current_no_scroll(index);
+            *last_strip_index_c.borrow_mut() = index;
+            viewer_c.borrow_mut().navigate_to(index);
+            canvas_c.queue_draw();
+        });
+    }
     {
         let strip_for_scroll = strip.clone();
         strip
@@ -358,8 +339,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
     track_hover_flag(&file_info_box, filename_hover.clone());
     track_hover_flag(&strip.borrow().scroll, strip_hover.clone());
 
-    // Таймери відкладеної появи елементів (керуються "show-delay-ms").
-    // Приховування завжди миттєве, тож окремих таймерів для нього не треба.
     let show_timer_prev: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
     let show_timer_next: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
     let show_timer_close: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
@@ -388,8 +367,18 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             let delay_ms = settings_cb.show_delay_ms();
             let nav_mode = VisibilityMode::from_setting(&settings_cb.nav_buttons_visibility_mode());
             if nav_mode == VisibilityMode::AutoHide {
-                schedule_reveal(&prev_rev, &show_timer_prev, state.previous || prev_hover.get(), delay_ms);
-                schedule_reveal(&next_rev, &show_timer_next, state.next || next_hover.get(), delay_ms);
+                schedule_reveal(
+                    &prev_rev,
+                    &show_timer_prev,
+                    state.previous || prev_hover.get(),
+                    delay_ms,
+                );
+                schedule_reveal(
+                    &next_rev,
+                    &show_timer_next,
+                    state.next || next_hover.get(),
+                    delay_ms,
+                );
             }
             let close_mode =
                 VisibilityMode::from_setting(&settings_cb.close_button_visibility_mode());
@@ -401,14 +390,25 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
                     delay_ms,
                 );
             }
-            let filename_mode = VisibilityMode::from_setting(&settings_cb.filename_label_visibility_mode());
+            let filename_mode =
+                VisibilityMode::from_setting(&settings_cb.filename_label_visibility_mode());
             if filename_mode == VisibilityMode::AutoHide {
-                schedule_reveal(&filename_rev, &show_timer_filename, state.filename || filename_hover.get(), delay_ms);
+                schedule_reveal(
+                    &filename_rev,
+                    &show_timer_filename,
+                    state.filename || filename_hover.get(),
+                    delay_ms,
+                );
             }
             let strip_mode =
                 VisibilityMode::from_setting(&settings_cb.thumbnail_strip_visibility_mode());
             if strip_mode == VisibilityMode::AutoHide {
-                schedule_reveal(&strip_rev, &show_timer_strip, state.strip || strip_hover.get(), delay_ms);
+                schedule_reveal(
+                    &strip_rev,
+                    &show_timer_strip,
+                    state.strip || strip_hover.get(),
+                    delay_ms,
+                );
             }
         }
     };
@@ -464,12 +464,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
     setup_drag_and_drop(&window, &viewer, &canvas, &settings, overlays);
 
     {
-        // Початковий стан кнопок/стрічки/назви файлу: `sync_title()`
-        // вимикає їх лише в момент ЗМІНИ шляху (`path_changed`), а якщо
-        // застосунок відкрито без жодного зображення (клік по іконці),
-        // шлях і до, і після лишається `None` — переходу не відбувається,
-        // і без цього явного виклику елементи так і лишились би
-        // ввімкненими за замовчуванням.
         let has_image = viewer.borrow().model.current_path().is_some();
         prev_button.set_sensitive(has_image);
         next_button.set_sensitive(has_image);
@@ -490,7 +484,7 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             canvas: canvas.clone(),
             window_title: window_title.clone(),
             filename_label: filename_label.clone(),
-            extra_info_label: extra_info_label.clone(), // Передаємо новий віджет
+            extra_info_label: extra_info_label.clone(),
             strip: strip.clone(),
             prev_button: prev_button.clone(),
             next_button: next_button.clone(),
@@ -499,26 +493,27 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             filename_revealer: filename_revealer.clone(),
             last_title_path: Rc::new(RefCell::new(None)),
             dims_ready: Rc::new(RefCell::new(false)),
-            // (len, перший шлях) — сигнатура поточного списку зображень для стрічки
             last_dir_sig: Rc::new(RefCell::new((0, None))),
             last_strip_index: last_strip_index.clone(),
             receiver: Rc::new(RefCell::new(receiver)),
             thumb_receiver: Rc::new(RefCell::new(thumb_receiver)),
         };
-        let tick_source =
-            glib::timeout_add_local(Duration::from_millis(16), move || tick.run());
+        let tick_source = glib::timeout_add_local(Duration::from_millis(16), move || tick.run());
         let tick_source_for_close = Rc::new(RefCell::new(Some(tick_source)));
 
         let viewer_for_close = viewer.clone();
         let brightness_for_close = brightness.clone();
         let tick_source_for_close = tick_source_for_close.clone();
-        let window_for_close = window.clone();
+        let app_for_close = app.clone();
+
         let closing_after_restore = Rc::new(Cell::new(false));
         let closing_after_restore_for_close = closing_after_restore.clone();
+
         window.connect_close_request(move |_| {
             if closing_after_restore_for_close.get() {
                 return glib::Propagation::Proceed;
             }
+
             closing_after_restore_for_close.set(true);
 
             if let Some(tick_source) = tick_source_for_close.borrow_mut().take() {
@@ -526,12 +521,16 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             }
 
             viewer_for_close.borrow_mut().commit_pending_rotation();
+
             if let Some(brightness) = &brightness_for_close {
-                let window = window_for_close.clone();
+                let app_hold = app_for_close.hold();
+
+                let brightness_keepalive = brightness_for_close.clone();
+
                 brightness.borrow_mut().restore_animated(move || {
-                    glib::idle_add_local_once(move || window.close());
+                    drop(brightness_keepalive);
+                    drop(app_hold);
                 });
-                return glib::Propagation::Stop;
             }
 
             glib::Propagation::Proceed
@@ -641,7 +640,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         });
     }
 
-    // Стрічка — оверлей поверх канвасу (як кнопки навігації), тому прозорість працює.
     {
         let strip_widget = strip.borrow().widget();
         strip_widget.set_hexpand(true);
