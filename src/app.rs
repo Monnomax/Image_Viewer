@@ -505,7 +505,37 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             receiver: Rc::new(RefCell::new(receiver)),
             thumb_receiver: Rc::new(RefCell::new(thumb_receiver)),
         };
-        glib::timeout_add_local(Duration::from_millis(16), move || tick.run());
+        let tick_source =
+            glib::timeout_add_local(Duration::from_millis(16), move || tick.run());
+        let tick_source_for_close = Rc::new(RefCell::new(Some(tick_source)));
+
+        let viewer_for_close = viewer.clone();
+        let brightness_for_close = brightness.clone();
+        let tick_source_for_close = tick_source_for_close.clone();
+        let window_for_close = window.clone();
+        let closing_after_restore = Rc::new(Cell::new(false));
+        let closing_after_restore_for_close = closing_after_restore.clone();
+        window.connect_close_request(move |_| {
+            if closing_after_restore_for_close.get() {
+                return glib::Propagation::Proceed;
+            }
+            closing_after_restore_for_close.set(true);
+
+            if let Some(tick_source) = tick_source_for_close.borrow_mut().take() {
+                tick_source.remove();
+            }
+
+            viewer_for_close.borrow_mut().commit_pending_rotation();
+            if let Some(brightness) = &brightness_for_close {
+                let window = window_for_close.clone();
+                brightness.borrow_mut().restore_animated(move || {
+                    glib::idle_add_local_once(move || window.close());
+                });
+                return glib::Propagation::Stop;
+            }
+
+            glib::Propagation::Proceed
+        });
     }
 
     {
@@ -654,19 +684,6 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
         adw::StyleManager::default().connect_notify_local(Some("dark"), move |_, _| {
             sync_window_theme_class(&window_clone);
             canvas_clone.queue_draw();
-        });
-    }
-
-    // Якщо на поточному зображенні лишився незбережений поворот (клікнули
-    // "Повернути", але не встигли перейти до іншого фото — див.
-    // viewer/rotate.rs), закриття вікна — останній момент, коли його
-    // можна записати на диск. Без цього обробника такий поворот просто
-    // губився б разом із процесом.
-    {
-        let viewer = viewer.clone();
-        window.connect_close_request(move |_| {
-            viewer.borrow_mut().commit_pending_rotation();
-            glib::Propagation::Proceed
         });
     }
 
