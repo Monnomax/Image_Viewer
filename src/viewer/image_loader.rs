@@ -5,8 +5,8 @@
 //
 //   1. `request_load()`/`decode_pixels()`/`to_pixbuf()` — основний шлях
 //      для Viewer (навігація, crossfade). І читання байтів, і саме
-//      декодування пікселів (крейт `image`, чистий Rust, Send) тепер
-//      виконуються у фоновому потоці. Розпакування JPEG/PNG — основна
+//      декодування пікселів тепер виконуються у фоновому потоці.
+//      Розпакування JPEG/PNG — основна
 //      CPU-вартість для важких/великих файлів, і раніше вона виконувалась
 //      синхронно на головному потоці GTK (бо GdkPixbuf/PixbufLoader не
 //      Send), причому саме в момент навігації/старту crossfade — це й
@@ -23,6 +23,8 @@
 //      пікселів — емулюючи те, що раніше безкоштовно робив
 //      `Pixbuf::apply_embedded_orientation()` (метод самого GdkPixbuf,
 //      недоступний поза головним потоком).
+//      Для HEIC/HEIF image-крейт використовує системну libheif (фіча
+//      "heif", див. Cargo.toml).
 //
 //   2. Стара `decode()` (bytes -> Pixbuf через PixbufLoader, синхронно)
 //      лишена як є — нею й далі користується стрічка мініатюр
@@ -35,6 +37,15 @@ use image::AnimationDecoder;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
+
+#[cfg(feature = "heif")]
+fn register_heif_decoding_hooks() {
+    static REGISTER_HOOKS: std::sync::Once = std::sync::Once::new();
+    REGISTER_HOOKS.call_once(|| {
+        libheif_rs::integration::image::register_heic_decoding_hook();
+        libheif_rs::integration::image::register_heif_decoding_hook();
+    });
+}
 
 /// Повідомлення від фонового потоку до головного циклу GTK.
 pub enum LoaderMsg {
@@ -110,6 +121,9 @@ fn decode_image(bytes: &[u8]) -> Result<LoadedImage, String> {
 }
 
 fn decode_pixels(bytes: &[u8]) -> Result<DecodedImage, String> {
+    #[cfg(feature = "heif")]
+    register_heif_decoding_hooks();
+
     let mut img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
 
     if let Some(orientation) = read_exif_orientation(bytes) {
@@ -200,14 +214,11 @@ pub fn decode(bytes: &[u8]) -> Result<Pixbuf, String> {
 ///
 /// Навіщо: `decode()` вище залежить від того, які формати вміє
 /// PixbufLoader — а це залежить від опційних системних плагінів
-/// gdk-pixbuf, встановлених у конкретному дистрибутиві. Підтримка .avif
-/// у "великому" перегляді (Viewer) вже йде через крейт `image`
-/// (фіча "avif-native", див. Cargo.toml) незалежно від системних
-/// плагінів gdk-pixbuf — але для мініатюр і досі викликався саме
-/// GdkPixbuf-шлях. Якщо основний decode() не впорався (найчастіше саме
-/// .avif на системі без gdk-pixbuf-плагіна для нього), пробуємо ще раз
-/// цим шляхом, перш ніж остаточно вважати мініатюру непридатною для
-/// показу.
+/// gdk-pixbuf, встановлених у конкретному дистрибутиві. Формати з
+/// окремим декодером у Viewer (AVIF, HEIC/HEIF) не залежать від цих
+/// плагінів, але для мініатюр спочатку викликається саме GdkPixbuf-шлях.
+/// Якщо він не впорався, пробуємо шлях крейта `image` перед тим, як
+/// остаточно вважати мініатюру непридатною для показу.
 pub fn decode_fallback(bytes: &[u8]) -> Result<Pixbuf, String> {
     let decoded = decode_pixels(bytes)?;
     Ok(to_pixbuf(decoded))

@@ -14,6 +14,12 @@ adw = { version = "0.7", package = "libadwaita", features = ["v1_5"] }
 natural_sort = { path = "vendor/natural_sort" }
 little_exif = "0.6.23"
 rexiv2 = { version = "0.10.0", optional = true }
+libheif-rs = {
+    version = "3",
+    default-features = false,
+    features = ["v1_17", "image"],
+    optional = true,
+}
 # Чисте Rust-декодування пікселів (без прив'язки до головного потоку GTK) —
 # щоб важке CPU-декодування великих JPEG/PNG можна було виконувати у
 # фоновому потоці, а не блокувати GTK під час навігації/crossfade. Сам
@@ -28,7 +34,7 @@ image = { version = "0.25" }
 kamadak-exif = "0.6"
 
 [features]
-default = ["gexiv2-metadata", "avif"]
+default = ["gexiv2-metadata", "avif", "heif"]
 gexiv2-metadata = ["dep:rexiv2"]
 # Декодування .avif через AV1-декодер dav1d (крейт `dav1d`, обгортка над
 # системною бібліотекою libdav1d, лінкується через pkg-config) — та сама
@@ -39,16 +45,17 @@ gexiv2-metadata = ["dep:rexiv2"]
 # не потрапить у список підтримуваних форматів (utils::IMAGE_EXTS) і файли
 # з цим розширенням не будуть показані при скануванні каталогу.
 avif = ["image/avif-native"]
+# Декодування HEIC/HEIF через системну libheif (потрібен libheif-dev >= 1.17).
+# Можна вимкнути для збірок без системної бібліотеки.
+heif = ["dep:libheif-rs"]
 
 [profile.release]
 opt-level = 3
 lto = true
 
-# `image`/`kamadak-exif` — чисто Rust-декодери (на відміну від системних
-# libjpeg-turbo/libpng, якими раніше користувався PixbufLoader). У
-# неоптимізованій dev-збірці таке декодування важких зображень може
-# займати секунди. Тут оптимізуються лише ЗАЛЕЖНОСТІ (весь код у vendor/
-# та crates.io) — код самого imgviewer лишається debug-профілю, тож
-# інкрементальна пересборка при правках лишається швидкою.
+# Декодування зображень у неоптимізованій dev-збірці може займати секунди.
+# Тут оптимізуються лише ЗАЛЕЖНОСТІ (весь код у vendor/ та crates.io) —
+# код самого imgviewer лишається debug-профілю, тож інкрементальна
+# пересборка при правках лишається швидкою.
 [profile.dev.package."*"]
 opt-level = 3

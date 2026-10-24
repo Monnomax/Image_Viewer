@@ -6,18 +6,6 @@ use natural_sort::compare;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-// ".avif" додається до списку лише коли увімкнена фіча "avif" (за
-// замовчуванням — увімкнена, див. Cargo.toml): декодування avif у
-// image_loader.rs залежить від фічі крейта `image` "avif-native", яка
-// лінкується проти системної libdav1d. Без цієї фічі (наприклад,
-// `--no-default-features`) файли .avif краще одразу не показувати в
-// списку зображень каталогу, ніж показувати і провалюватись при спробі
-// відкрити.
-#[cfg(feature = "avif")]
-const IMAGE_EXTS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "ico", "pnm", "avif",
-];
-#[cfg(not(feature = "avif"))]
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "ico", "pnm",
 ];
@@ -25,7 +13,12 @@ const IMAGE_EXTS: &[&str] = &[
 pub fn is_image_file(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
+        .map(|e| {
+            let ext = e.to_lowercase();
+            IMAGE_EXTS.contains(&ext.as_str())
+                || (cfg!(feature = "avif") && ext == "avif")
+                || (cfg!(feature = "heif") && matches!(ext.as_str(), "heic" | "heif"))
+        })
         .unwrap_or(false)
 }
 
@@ -82,9 +75,21 @@ pub fn canonical_path_key(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::canonical_path_key;
+    use super::{canonical_path_key, is_image_file};
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn is_image_file_recognizes_heic_and_heif_when_enabled() {
+        assert_eq!(
+            is_image_file(Path::new("photo.HEIC")),
+            cfg!(feature = "heif")
+        );
+        assert_eq!(
+            is_image_file(Path::new("photo.heif")),
+            cfg!(feature = "heif")
+        );
+    }
 
     #[test]
     fn canonical_path_key_uses_same_value_for_equivalent_paths() {

@@ -69,6 +69,8 @@ pub fn format_extension_name(ext: &str) -> String {
         "ico" => "ICO",
         "pnm" => "PNM",
         "avif" => "AVIF",
+        "heic" => "HEIC",
+        "heif" => "HEIF",
         other if !other.is_empty() => return other.to_uppercase(),
         _ => "Невідомий формат",
     }

@@ -143,6 +143,10 @@ pub fn build(app: &Application, path_arg: Option<String>, replace_existing: bool
             let filter = gtk4::FileFilter::new();
             filter.set_name(Some("Зображення"));
             filter.add_mime_type("image/*");
+            filter.add_pattern("*.heic");
+            filter.add_pattern("*.heif");
+            filter.add_pattern("*.HEIC");
+            filter.add_pattern("*.HEIF");
 
             let dialog = gtk4::FileDialog::builder()
                 .title("Відкрити зображення")
